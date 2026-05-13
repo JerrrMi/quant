@@ -56,17 +56,17 @@ type TradeCommand struct {
 	// Intent 为源自策略输出的意图副本或精炼子集；执行层以此为主要语义参考。
 	Intent strategy.TradeIntent `json:"intent"`
 
-	// TargetNotionalUSDT 为本次指令的名义目标（USDT 计价）；可与 Intent 内字段并存，以本字段为编排最终值（若有则覆盖 Intent 内同名语义）。
-	TargetNotionalUSDT *float64 `json:"target_notional_usdt,omitempty"`
+	// TargetNotional 为本次指令的名义目标（计价约定为 USDT 等价快照；跨 venue 语义以实现为准）。
+	TargetNotional *float64 `json:"target_notional,omitempty"`
 
-	// TargetPositionQty 为基币数量维度的目标净仓；与 TargetNotionalUSDT 二选一或按 Kind 解释优先级由执行文档约定。
-	TargetPositionQty *float64 `json:"target_position_qty,omitempty"`
+	// TargetPosition 为基币数量维度的目标净仓；与 TargetNotional 二选一或按 Kind 解释优先级由执行文档约定。
+	TargetPosition *float64 `json:"target_position,omitempty"`
 
 	// ReduceOnly 为 true 时强制减仓单语义。
 	ReduceOnly bool `json:"reduce_only"`
 
 	// DeadlineUnixMs 为指令失效的绝对时间（Unix 毫秒）；过期后 Agent 不得再向交易所提交。
-	DeadlineUnixMs int64 `json:"deadline_unix_ms"`
+	DeadlineUnixMs int64 `json:"deadline"`
 
 	// Nonce 为发起方单次批次的随机串或单调值，用于调试与补充去重维度。
 	Nonce string `json:"nonce"`
@@ -82,6 +82,10 @@ type TradeCommand struct {
 type CommandAck struct {
 	CommandID string        `json:"command_id"`
 	Status    CommandStatus `json:"status"`
+
+	// RefEnvelopeSeq 为被确认的 SaaS → Agent command 信封 seq（可与外层 Envelope.AckSeq 对照）。
+	RefEnvelopeSeq int64 `json:"ref_envelope_seq,omitempty"`
+
 	// Message 为人类可读原因（拒绝/降级时填充）。
 	Message string `json:"message,omitempty"`
 	// ExchangeOrderID 在 Accepted/Working 后可填交易所订单号（Agent 真源）。

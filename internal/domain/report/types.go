@@ -139,8 +139,12 @@ type DeltaReport struct {
 
 // ReportAck 为 SaaS 对 DeltaReport 的接收确认（可选轻量契约）。
 type ReportAck struct {
-	ReportID         string `json:"report_id"`
-	Received         bool   `json:"received"`
+	ReportID string `json:"report_id"`
+	Received bool   `json:"received"`
+
+	// RefEnvelopeSeq 为被确认的 Agent → SaaS delta_report 信封 seq。
+	RefEnvelopeSeq int64 `json:"ref_envelope_seq,omitempty"`
+
 	Message          string `json:"message,omitempty"`
 	ServerTimeUnixMs int64  `json:"server_time_unix_ms"`
 }

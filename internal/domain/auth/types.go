@@ -13,7 +13,7 @@ const (
 	ScopeExecutionWrite AuthScope = "execution_write"
 )
 
-// AuthMessage 为握手阶段客户端发往服务器的自描述载荷（密码学凭证不以此结构明文固化，仅存占位字段名）。
+// AuthMessage 为握手阶段 Agent → SaaS 的自描述载荷（密码学凭证不以此结构明文固化，仅存占位字段名）。
 type AuthMessage struct {
 	// ProtocolVersion 为协商标定的域协议版本号。
 	ProtocolVersion string `json:"protocol_version"`
@@ -35,12 +35,18 @@ type AuthMessage struct {
 
 	// Nonce 为一次性随机串，防重放（由客户端生成）。
 	Nonce string `json:"nonce"`
+
+	// LastSeenSaasSeq 为重连收敛：Agent 在断开前处理的来自 SaaS 的最后一条信封 seq（不含心跳时可一并计数；细则见 ws-protocol）。
+	LastSeenSaasSeq int64 `json:"last_seen_saas_seq,omitempty"`
 }
 
-// AuthResult 为服务器对 AuthMessage 的裁决（不含会话续期实现细节）。
+// AuthResult 为 SaaS 对 AuthMessage 的裁决（不含会话续期实现细节）。
 type AuthResult struct {
 	// OK 为 false 时不得进入业务帧。
 	OK bool `json:"ok"`
+
+	// ErrorCode 为机器可读拒绝码（OK=true 时为空）。
+	ErrorCode string `json:"error_code,omitempty"`
 
 	// SessionID 为短时会话标识（opaque）。
 	SessionID string `json:"session_id,omitempty"`
@@ -53,4 +59,7 @@ type AuthResult struct {
 
 	// ServerTimeUnixMs 为服务端签发时间（Unix 毫秒）。
 	ServerTimeUnixMs int64 `json:"server_time_unix_ms"`
+
+	// LastSeenAgentSeq 为重连收敛：SaaS 记录的来自该 Agent 的最后一条信封 seq（可选镜子字段，便于对账）。
+	LastSeenAgentSeq int64 `json:"last_seen_agent_seq,omitempty"`
 }
