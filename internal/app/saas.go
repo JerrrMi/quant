@@ -18,6 +18,5 @@ func RunSaaS(ctx context.Context, cfg config.SaaSConfig, deps BootstrapDeps) err
 		log = slog.Default()
 	}
 	log.Info("SaaS stub ready", "listen", cfg.WebSocket.ListenAddr, "ws_path", cfg.WebSocket.AgentPath, "has_db", deps.DB != nil)
-	// TODO: wire HTTP server, GORM AutoMigrate on deps.DB
 	return nil
 }

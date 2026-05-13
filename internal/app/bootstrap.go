@@ -8,6 +8,7 @@ import (
 
 	"github.com/JerrrMi/quant/internal/config"
 	"github.com/JerrrMi/quant/internal/infra"
+	infradb "github.com/JerrrMi/quant/internal/infra/db"
 	"gorm.io/gorm"
 )
 
@@ -41,13 +42,16 @@ func BootstrapSaaS(cfg config.SaaSConfig, logger *slog.Logger) (BootstrapDeps, e
 	if dsn == "" {
 		dsn = "file::memory:?cache=shared"
 	}
-	db, err := infra.OpenSQLite(dsn)
+	gormDB, err := infra.OpenSQLite(dsn)
 	if err != nil {
 		return BootstrapDeps{}, fmt.Errorf("bootstrap saas: open database: %w", err)
 	}
+	if err := infradb.AutoMigrateAll(gormDB); err != nil {
+		return BootstrapDeps{}, fmt.Errorf("bootstrap saas: automigrate: %w", err)
+	}
 	return BootstrapDeps{
 		Logger:    logger,
-		DB:        db,
+		DB:        gormDB,
 		Cache:     nil,
 		WSServer:  nil,
 		WSClient:  nil,
@@ -67,13 +71,16 @@ func BootstrapAgent(cfg config.AgentConfig, logger *slog.Logger) (BootstrapDeps,
 	if dsn == "" {
 		dsn = "file::memory:?cache=shared"
 	}
-	db, err := infra.OpenSQLite(dsn)
+	gormDB, err := infra.OpenSQLite(dsn)
 	if err != nil {
 		return BootstrapDeps{}, fmt.Errorf("bootstrap agent: open local sqlite: %w", err)
 	}
+	if err := infradb.AutoMigrateAll(gormDB); err != nil {
+		return BootstrapDeps{}, fmt.Errorf("bootstrap agent: automigrate: %w", err)
+	}
 	return BootstrapDeps{
 		Logger:    logger,
-		DB:        db,
+		DB:        gormDB,
 		Cache:     nil,
 		WSServer:  nil,
 		WSClient:  nil,
