@@ -1,0 +1,9 @@
+# Agent：可持有交易所凭证（通过环境变量注入 Secret，勿提交真实钥匙）
+saas_ws_url: "ws://127.0.0.1:8080/v1/agent"
+
+exchange:
+  name: "binance"
+
+# API Key/Secret 仅从环境读取，例如 BINANCE_API_KEY —— 不在此文件写明文
+logging:
+  level: "info"

@@ -1,0 +1,13 @@
+---
+description: Go 工程结构、分层与错误处理
+globs: **/*.go
+alwaysApply: false
+---
+
+# Go 架构约定
+
+- **结构**：`cmd/*` 仅组装；业务编排 → `internal/app`；纯领域 → `internal/domain`；副作用 → `internal/infra` / `internal/executor` / `internal/scheduler`。
+- **命名**：包名不超过 1–2 个词；`NewXxx` 构造函数返回具体类型或小包接口；避免 `util` / `common` 垃圾桶包。
+- **接口优先**：在消费方定义小接口；勿提前做大而全的 `Repository` 接口除非多处需要。
+- **错误**：`fmt.Errorf("context: %w", err)` 包装向上传递；策略纯函数返回领域错误类型或哨兵值，不在策略里打日志。
+- **Canonical**：`internal/config/config.go`、`internal/lifecycle/bootstrap.go`。

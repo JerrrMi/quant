@@ -1,0 +1,10 @@
+# SaaS 控制面（不得存放交易所 API Key；密钥仅在 Agent）
+http:
+  listen_addr: "127.0.0.1:8080"
+
+database:
+  # 骨架阶段默认 SQLite 内存库；生产可换 PostgreSQL DSN 并由 infra 切换驱动
+  dsn: "file:saas_dev.db?cache=shared&mode=rwc"
+
+logging:
+  level: "info"

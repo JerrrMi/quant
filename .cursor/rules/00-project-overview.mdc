@@ -1,0 +1,12 @@
+---
+description: AltShort 项目总览与模块边界
+alwaysApply: true
+---
+
+# AltShort 总览
+
+- **业务**：做空山寨币的量化交易系统；策略核心是纯 `Step()`，回测与实盘同构。
+- **进程**：`cmd/saas`（控制面）、`cmd/agent`（执行，**唯一持有交易所 Key**）、`cmd/backtest`（回测）。
+- **边界**：`internal/domain` 无 I/O；`internal/executor` 仅执行与 venue 对话，**不承载策略逻辑**；`internal/infra` 放 GORM/日志/外部客户端；`internal/backtest` 放回放引擎与数据源适配。
+- **数据**：演进用 GORM `AutoMigrate`；**禁止** SQL migration 文件（目录仅占位）。  
+- **Canonical**：`CLAUDE.md`、`docs/architecture.md`。

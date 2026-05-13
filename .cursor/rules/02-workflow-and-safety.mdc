@@ -1,0 +1,12 @@
+---
+description: 执行顺序、安全与测试约束
+alwaysApply: true
+---
+
+# 工作流与安全
+
+- **顺序**：先编译 → 最小可运行闭环 → 再扩展；禁止单 PR 全仓重写。  
+- **策略纯函数**：策略包禁止网络、DB、墙钟时间、`rand`、文件 I/O（见 `CLAUDE.md`）。  
+- **密钥**：Binance（及同类）Key **仅**在 Agent 进程与配置（`configs/agent.yaml` 环境注入）；**禁止**写入 `configs/saas.yaml` 或 SaaS 代码路径。  
+- **测试**：能跑 `go test ./...`；对 `Step()` 与归一化计算优先单元测试。  
+- **Canonical**：各 `cmd/*/main.go`、`AGENTS.md`。
