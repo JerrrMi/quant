@@ -27,7 +27,7 @@ func run(ctx context.Context) error {
 	deps := lifecycle.NewBootstrapDeps(log, nil)
 
 	// --- 预留：internal/backtest HistoricalLoader 从磁盘/DB 加载 ---
-	// --- 预留：Engine 接入 domain.Strategy Step ---
+	// --- 预留：Engine 接入 strategy.Stepper.Step ---
 
 	if err := app.RunBacktest(ctx, deps); err != nil {
 		return fmt.Errorf("app.RunBacktest: %w", err)

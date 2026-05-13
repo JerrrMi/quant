@@ -1,5 +1,5 @@
 # internal/domain
 
-领域类型、值对象与 **策略纯函数**（`Step`）契约。禁止依赖 `internal/infra`、网络或系统时间源（墙钟应通过 `StepInput` 注入）。
+领域类型与值对象；**策略纯函数**契约见 `strategy` 子包（`Stepper`）。禁止依赖 `internal/infra`、网络或系统时间源（墙钟通过 `AltShortStrategyInput.NowUnixMs` 注入）。
 
-**Canonical**：`types.go`（随 Phase 扩展为更细的子文件）。
+**Canonical**：根 `types.go`（`Bar`、`Side`）；冻结模型见 `docs/domain-model.md`。
