@@ -32,7 +32,7 @@ type ExecutionStateSnapshot struct {
 
 	OpenOrders []report.OpenOrderSnapshot `json:"open_orders,omitempty"`
 	Positions  []report.PositionSnapshot  `json:"positions,omitempty"`
-	Account    *report.AccountSnapshot   `json:"account,omitempty"`
+	Account    *report.AccountSnapshot    `json:"account,omitempty"`
 
 	// LastDeltaReportID 为折叠所使用的最近增量包 id（便于诊断）。
 	LastDeltaReportID string `json:"last_delta_report_id,omitempty"`

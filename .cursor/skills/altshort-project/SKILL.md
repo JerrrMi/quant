@@ -26,7 +26,7 @@ description: AltShort 量化仓库的结构、约束与协作流程；涉及本�
 ## 工作流程
 
 1. 阅读 `CLAUDE.md`、`AGENTS.md` 与 `.cursor/rules/*`。  
-2. 定位并阅读相关 **canonical** 源文件（如 `internal/config/config.go`、`internal/lifecycle/bootstrap.go`、对应 `cmd/*/main.go`）。  
+2. 定位并阅读相关 **canonical** 源文件（如 `internal/config/config.go`、`internal/app/bootstrap.go`、对应 `cmd/*/main.go`）。  
 3. 确认本次 **单一清晰任务**；列出将修改的文件清单（路径级）。  
 4. 只做 **最小必要** 的编辑，保持策略接口稳定；不跨 Phase 混改。  
 

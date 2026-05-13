@@ -1,9 +1,32 @@
-# Agent：可持有交易所凭证（通过环境变量注入 Secret，勿提交真实钥匙）
-saas_ws_url: "ws://127.0.0.1:8080/v1/agent"
+# AltShort Agent 执行端
+# 凭证：以下为 **环境变量名** 占位，请在本机/export 同名变量填入测试网或实盘钥匙；勿把真实密钥写入仓库。
+binance:
+  api_key_env: "ALTSHORT_BINANCE_API_KEY"
+  api_secret_env: "ALTSHORT_BINANCE_API_SECRET"
+  use_testnet: true
+
+connection:
+  saas_ws_url: "ws://127.0.0.1:8080/v1/agent"
+  local_bind_addr: "0.0.0.0:0"
+  dial_timeout_seconds: 30
+  tls_insecure_skip_verify: false
 
 exchange:
   name: "binance"
 
-# API Key/Secret 仅从环境读取，例如 BINANCE_API_KEY —— 不在此文件写明文
+reconnect:
+  max_attempts: 12
+  initial_backoff_seconds: 2
+  max_backoff_seconds: 120
+  jitter_ratio: 0.2
+
+risk:
+  max_open_orders: 20
+  max_notional_quote_per_order: "5000"
+  max_daily_loss_quote: "2500"
+
+local_store:
+  sqlite_dsn: ""
+
 logging:
   level: "info"

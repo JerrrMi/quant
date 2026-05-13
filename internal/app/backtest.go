@@ -5,12 +5,12 @@ import (
 	"log/slog"
 
 	"github.com/altshort/quant/internal/backtest"
-	"github.com/altshort/quant/internal/lifecycle"
+	"github.com/altshort/quant/internal/config"
 )
 
 // RunBacktest 编排回测占位的调用链：历史加载器 → 引擎 → 策略调用器。
 // 由 cmd/backtest 的 run() 调用；deps.DB 可为 nil（纯内存回放）。
-func RunBacktest(ctx context.Context, deps lifecycle.BootstrapDeps) error {
+func RunBacktest(ctx context.Context, cfg config.BacktestConfig, deps BootstrapDeps) error {
 	_ = ctx
 	log := deps.Logger
 	if log == nil {
@@ -18,7 +18,7 @@ func RunBacktest(ctx context.Context, deps lifecycle.BootstrapDeps) error {
 	}
 	loader := backtest.NewHistoricalLoader()
 	engine := backtest.NewEngine(loader)
-	log.Info("Backtest stub wired", "has_engine", engine != nil)
+	log.Info("Backtest stub wired", "symbol", cfg.Data.Symbol, "provider", cfg.Data.Provider, "has_engine", engine != nil)
 	// TODO: 接入 domain 策略 Step 与 Bar/Candle 输入
 	return backtest.RunOnce(engine, log)
 }

@@ -5,12 +5,12 @@ package instance
 type LifecycleState string
 
 const (
-	LifecycleStateCreated    LifecycleState = "created"
-	LifecycleStateStarting   LifecycleState = "starting"
-	LifecycleStateRunning    LifecycleState = "running"
-	LifecycleStateDraining   LifecycleState = "draining"
-	LifecycleStateStopped    LifecycleState = "stopped"
-	LifecycleStateFailed     LifecycleState = "failed"
+	LifecycleStateCreated  LifecycleState = "created"
+	LifecycleStateStarting LifecycleState = "starting"
+	LifecycleStateRunning  LifecycleState = "running"
+	LifecycleStateDraining LifecycleState = "draining"
+	LifecycleStateStopped  LifecycleState = "stopped"
+	LifecycleStateFailed   LifecycleState = "failed"
 )
 
 // StrategyState 描述策略 goroutine/回测迭代是否在被调度执行（与交易所连接无关）。

@@ -47,6 +47,6 @@ AltShort 是一个做空山寨币的量化交易系统。
 | `internal/executor/` | 下单与撤单等执行适配（实盘侧与 venue 对话）；策略逻辑不放此处。 |
 | `internal/backtest/` | 历史数据装载、撮合/费用模型、回测引擎与结果收集的占位与实现。 |
 | `internal/app/` | 用例编排与对外端口（HTTP 等）的粘合层（随 Phase 充实）。 |
-| `internal/lifecycle/` | 启动/bootstrap、`BootstrapDeps` 等与进程生命周期相关的组装。 |
+| `internal/lifecycle/` | 进程生命周期钩子占位（优雅退出等）；依赖装配见 `internal/app/bootstrap.go`。 |
 
 本项目另外包含 `internal/config/`（配置结构体与加载）、`docs/`（架构说明）。`migrations/` 仅占位目录，**不使用** SQL migration；请使用 GORM `AutoMigrate`。

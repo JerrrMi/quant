@@ -1,10 +1,27 @@
-# SaaS 控制面（不得存放交易所 API Key；密钥仅在 Agent）
-http:
-  listen_addr: "127.0.0.1:8080"
-
+# AltShort SaaS 控制面
+# 安全：不得在此文件存放 Binance/API 密钥或任何实盘秘密；密钥仅在 Agent 进程与环境变量中。
 database:
-  # 骨架阶段默认 SQLite 内存库；生产可换 PostgreSQL DSN 并由 infra 切换驱动
   dsn: "file:saas_dev.db?cache=shared&mode=rwc"
+
+redis:
+  enable: false
+  addr: "127.0.0.1:6379"
+  db: 0
+  username: ""
+  password_env: "ALTSHORT_SAAS_REDIS_PASSWORD"
+
+websocket:
+  listen_addr: "127.0.0.1:8080"
+  agent_path: "/v1/agent"
+
+scheduler:
+  enable: false
+  tick_interval_seconds: 60
+
+model:
+  id: "saas_orchestration_default"
+  values:
+    signal_lookback: 96
 
 logging:
   level: "info"

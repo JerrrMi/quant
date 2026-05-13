@@ -1,0 +1,31 @@
+# AltShort Backtest 离线回放
+# 不涉及交易所密钥或 SaaS WebSocket。
+data:
+  provider: "file"
+  path: "./data/bars"
+  symbol: "BTCUSDT"
+
+fees:
+  maker_bps: 2
+  taker_bps: 5
+
+slippage:
+  bps: 1
+
+replay:
+  window:
+    start: ""
+    end: ""
+  warmup_bars: 200
+
+capital:
+  initial_quote: "100000"
+  currency: "USDT"
+
+model:
+  id: "backtest_model_default"
+  values:
+    position_target: -0.05
+
+logging:
+  level: "info"

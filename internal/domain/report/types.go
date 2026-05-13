@@ -46,15 +46,15 @@ const (
 
 // OpenOrderSnapshot 为尚未完全终结的挂单快照（Agent 从交易所 REST/WS 收敛）。
 type OpenOrderSnapshot struct {
-	ExchangeOrderID string `json:"exchange_order_id"`
-	Symbol          string `json:"symbol"`
+	ExchangeOrderID string      `json:"exchange_order_id"`
+	Symbol          string      `json:"symbol"`
 	Side            domain.Side `json:"side"`
 	// Price 为限价；市价单语义由 Type 字段（若扩展）或价格为 0 约定。
-	Price       float64 `json:"price"`
-	Quantity    float64 `json:"quantity"`
-	FilledQty   float64 `json:"filled_qty"`
-	Status      OrderStatus `json:"status"`
-	ReduceOnly  bool   `json:"reduce_only,omitempty"`
+	Price      float64     `json:"price"`
+	Quantity   float64     `json:"quantity"`
+	FilledQty  float64     `json:"filled_qty"`
+	Status     OrderStatus `json:"status"`
+	ReduceOnly bool        `json:"reduce_only,omitempty"`
 	// ExchangeUpdateTimeUnixMs 为交易所订单状态最后更新时间（Unix 毫秒）。
 	ExchangeUpdateTimeUnixMs int64 `json:"exchange_update_time_unix_ms"`
 }
@@ -139,8 +139,8 @@ type DeltaReport struct {
 
 // ReportAck 为 SaaS 对 DeltaReport 的接收确认（可选轻量契约）。
 type ReportAck struct {
-	ReportID  string `json:"report_id"`
-	Received  bool   `json:"received"`
-	Message   string `json:"message,omitempty"`
-	ServerTimeUnixMs int64 `json:"server_time_unix_ms"`
+	ReportID         string `json:"report_id"`
+	Received         bool   `json:"received"`
+	Message          string `json:"message,omitempty"`
+	ServerTimeUnixMs int64  `json:"server_time_unix_ms"`
 }

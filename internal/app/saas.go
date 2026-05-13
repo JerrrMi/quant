@@ -7,18 +7,17 @@ import (
 	"log/slog"
 
 	"github.com/altshort/quant/internal/config"
-	"github.com/altshort/quant/internal/lifecycle"
 )
 
 // RunSaaS 启动 SaaS 控制面占位逻辑：后续在此挂载 HTTP 与 AutoMigrate。
 // 由 cmd/saas 的 run() 在加载配置与 BootstrapDeps 后调用。
-func RunSaaS(ctx context.Context, cfg config.SaaSConfig, deps lifecycle.BootstrapDeps) error {
+func RunSaaS(ctx context.Context, cfg config.SaaSConfig, deps BootstrapDeps) error {
 	_ = ctx
 	log := deps.Logger
 	if log == nil {
 		log = slog.Default()
 	}
-	log.Info("SaaS stub ready", "listen", cfg.HTTP.ListenAddr, "has_db", deps.DB != nil)
+	log.Info("SaaS stub ready", "listen", cfg.WebSocket.ListenAddr, "ws_path", cfg.WebSocket.AgentPath, "has_db", deps.DB != nil)
 	// TODO: wire HTTP server, GORM AutoMigrate on deps.DB
 	return nil
 }

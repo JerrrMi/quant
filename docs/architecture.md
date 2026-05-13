@@ -11,7 +11,6 @@
 ```mermaid
 flowchart TB
   cmd[cmd/*] --> app[internal/app]
-  cmd --> lifecycle[internal/lifecycle]
   app --> domain[internal/domain]
   app --> scheduler[internal/scheduler]
   app --> backtest[internal/backtest]

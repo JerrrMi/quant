@@ -5,32 +5,52 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/altshort/quant/internal/app"
+	"github.com/altshort/quant/internal/config"
 	"github.com/altshort/quant/internal/infra"
-	"github.com/altshort/quant/internal/lifecycle"
 )
 
 func main() {
 	if err := run(context.Background()); err != nil {
-		slog.Error("backtest exited", "err", err)
+		slog.Error("backtest exited with error", "err", err)
 		os.Exit(1)
 	}
 }
 
-// run 初始化回测依赖并调用 app.RunBacktest；历史数据加载器、引擎与策略调用链在 internal/backtest 逐步充实。
+// run：加载回测配置 → 校验 → 日志 → 依赖装配 → 应用入口。
 func run(ctx context.Context) error {
 	slog.Info("AltShort Backtest process starting")
 
-	log := infra.NewLogger("backtest", "info")
-	// 回测可不连持久库；传 nil DB 表示纯内存路径。
-	deps := lifecycle.NewBootstrapDeps(log, nil)
+	cfgPath := filepath.Clean("configs/backtest.yaml")
 
-	// --- 预留：internal/backtest HistoricalLoader 从磁盘/DB 加载 ---
-	// --- 预留：Engine 接入 strategy.Stepper.Step ---
+	cfg, err := config.LoadBacktestConfig(cfgPath)
+	if err != nil {
+		return fmt.Errorf("load Backtest configuration: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("validate Backtest configuration from %q: %w", cfgPath, err)
+	}
 
-	if err := app.RunBacktest(ctx, deps); err != nil {
-		return fmt.Errorf("app.RunBacktest: %w", err)
+	logger := infra.NewLogger("backtest", cfg.Logging.Level)
+
+	deps, err := app.BootstrapBacktest(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("assemble Backtest dependencies (config=%q): %w", cfgPath, err)
+	}
+
+	log := deps.Logger
+	log.Info(
+		"Backtest bootstrap complete",
+		"config", cfgPath,
+		"symbol", cfg.Data.Symbol,
+		"capital", cfg.Capital.InitialQuote,
+		"currency", cfg.Capital.Currency,
+	)
+
+	if err := app.RunBacktest(ctx, cfg, deps); err != nil {
+		return fmt.Errorf("run Backtest application: %w", err)
 	}
 	return nil
 }
