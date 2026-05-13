@@ -2,8 +2,8 @@
 package command
 
 import (
-	"github.com/altshort/quant/internal/domain"
-	"github.com/altshort/quant/internal/domain/strategy"
+	"github.com/JerrrMi/quant/internal/domain"
+	"github.com/JerrrMi/quant/internal/domain/strategy"
 )
 
 // IdempotencyKey 为幂等键：同一自然操作在重试时复用相同键，由调度器分配；Agent 据此去重或对应 venue clientOrderId。

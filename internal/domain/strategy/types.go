@@ -1,7 +1,7 @@
 // Package strategy 定义策略纯函数的输入/输出契约与相关快照类型；不含实现与 I/O。
 package strategy
 
-import "github.com/altshort/quant/internal/domain"
+import "github.com/JerrrMi/quant/internal/domain"
 
 // MarketFeatureSnapshot 是单步可用的市场特征切片：同时可含（a）当前点上的归一化/无量纲量、（b）覆盖固定回溯窗口的统计量摘要。
 // 全部为只读输入：由上游特征管线或回测引擎在调用 Step 之前拼装；Step 内不得修改。

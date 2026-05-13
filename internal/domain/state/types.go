@@ -2,8 +2,8 @@
 package state
 
 import (
-	"github.com/altshort/quant/internal/domain/instance"
-	"github.com/altshort/quant/internal/domain/report"
+	"github.com/JerrrMi/quant/internal/domain/instance"
+	"github.com/JerrrMi/quant/internal/domain/report"
 )
 
 // MarketStateSnapshot 为单一标的上的市场公开信息收敛（价格、资金费率等）。

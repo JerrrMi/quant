@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/altshort/quant/internal/config"
-	"github.com/altshort/quant/internal/infra"
+	"github.com/JerrrMi/quant/internal/config"
+	"github.com/JerrrMi/quant/internal/infra"
 	"gorm.io/gorm"
 )
 

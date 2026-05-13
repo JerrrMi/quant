@@ -1,4 +1,4 @@
-module github.com/altshort/quant
+module github.com/JerrrMi/quant
 
 go 1.22
 

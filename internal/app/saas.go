@@ -6,7 +6,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/altshort/quant/internal/config"
+	"github.com/JerrrMi/quant/internal/config"
 )
 
 // RunSaaS 启动 SaaS 控制面占位逻辑：后续在此挂载 HTTP 与 AutoMigrate。

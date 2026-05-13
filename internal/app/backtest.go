@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/altshort/quant/internal/backtest"
-	"github.com/altshort/quant/internal/config"
+	"github.com/JerrrMi/quant/internal/backtest"
+	"github.com/JerrrMi/quant/internal/config"
 )
 
 // RunBacktest 编排回测占位的调用链：历史加载器 → 引擎 → 策略调用器。

@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/altshort/quant/internal/app"
-	"github.com/altshort/quant/internal/config"
-	"github.com/altshort/quant/internal/infra"
+	"github.com/JerrrMi/quant/internal/app"
+	"github.com/JerrrMi/quant/internal/config"
+	"github.com/JerrrMi/quant/internal/infra"
 )
 
 func main() {

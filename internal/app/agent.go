@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/altshort/quant/internal/config"
+	"github.com/JerrrMi/quant/internal/config"
 )
 
 // RunAgent 启动 Agent 占位逻辑：后续在此初始化 WebSocket 客户端、ExchangeExecutor、Heartbeat。

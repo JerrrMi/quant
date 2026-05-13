@@ -1,7 +1,7 @@
 // Package report 定义 Agent 向 SaaS 汇报的执行增量与账户/持仓快照结构；无 I/O。
 package report
 
-import "github.com/altshort/quant/internal/domain"
+import "github.com/JerrrMi/quant/internal/domain"
 
 // FillRecord 单条成交明细（交易所已成交事实；Agent 从 venue 拉取或推送解析后的真源子集）。
 type FillRecord struct {

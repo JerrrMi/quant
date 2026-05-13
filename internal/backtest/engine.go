@@ -5,7 +5,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/altshort/quant/internal/domain"
+	"github.com/JerrrMi/quant/internal/domain"
 )
 
 // HistoricalLoader 抽象历史 K 线/成交来源；后续可接文件、DB、Parquet。

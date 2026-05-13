@@ -1,6 +1,6 @@
 package strategy
 
-import "github.com/altshort/quant/internal/domain"
+import "github.com/JerrrMi/quant/internal/domain"
 
 // Stepper 是纯策略单步计算契约：给定完整输入快照，返回输出；不得产生 I/O、不得依赖执行侧。
 type Stepper interface {
