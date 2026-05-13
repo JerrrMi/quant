@@ -3,6 +3,10 @@ package strategy
 
 import "github.com/JerrrMi/quant/internal/domain"
 
+// RiskCompositeNormalizedKey 为 MinimalShortStep 识别的综合风险占位键；特征管线填入 [0,1]，缺失视为低风险 0。
+// 完整策略可改用自有键集合，同时在文档标注迁移。
+const RiskCompositeNormalizedKey = "risk_composite_01"
+
 // MarketFeatureSnapshot 是单步可用的市场特征切片：同时可含（a）当前点上的归一化/无量纲量、（b）覆盖固定回溯窗口的统计量摘要。
 // 全部为只读输入：由上游特征管线或回测引擎在调用 Step 之前拼装；Step 内不得修改。
 type MarketFeatureSnapshot struct {
@@ -34,10 +38,34 @@ type RiskSnapshot struct {
 	TradingHalted bool `json:"trading_halted,omitempty"`
 }
 
+// MinimalSkeletonParams 为最小做空骨架的可选参数，由编排层或回测注入；全零字段表示使用包内默认常量。
+// 完整策略落地后可忽略本字段或迁移为独立版本化参数结构体。
+type MinimalSkeletonParams struct {
+	// MaxShortHoldMs 空仓自 ShortOpenedAtUnixMs 起最长持有毫秒，超时则平仓。
+	MaxShortHoldMs int64 `json:"max_short_hold_ms,omitempty"`
+	// EntryLogReturn 为开仓所需的非正对数收益阈值（ ln(close/prior) 需 ≤ 该值，通常为负小数）。
+	EntryLogReturn float64 `json:"entry_log_return,omitempty"`
+	// TakeProfitLogReturn 为止盈：空仓时 ln(close/prior) ≥ 该正值则平空。
+	TakeProfitLogReturn float64 `json:"take_profit_log_return,omitempty"`
+	// StopLossLogReturn 为止损：空仓时 ln(close/prior) ≥ 该正值（价格反弹）则平空。
+	StopLossLogReturn float64 `json:"stop_loss_log_return,omitempty"`
+	// ReduceLogReturnMin 为减仓区间下界：空仓时收益在该下界与 TakeProfit 之间则减仓。
+	ReduceLogReturnMin float64 `json:"reduce_log_return_min,omitempty"`
+}
+
 // AltShortStrategyInput 是单步策略计算的单次输入：只含快照与只读字段，供纯函数 Step 使用。
 type AltShortStrategyInput struct {
 	// Symbol 为交易对标识（venue 规范化，例如 "BTCUSDT"）；只读输入。
 	Symbol string `json:"symbol"`
+
+	// NetPositionQty 为该标的策略可见净持仓：多仓为正、空仓为负；绝对值接近 0 视为无仓。
+	NetPositionQty float64 `json:"net_position_qty"`
+
+	// ShortOpenedAtUnixMs 为当前空仓的开仓逻辑时间（毫秒，与 NowUnixMs 同源）；非空仓时应为 0。
+	ShortOpenedAtUnixMs int64 `json:"short_opened_at_unix_ms,omitempty"`
+
+	// PriorBarClose 为上一根已完结 K 线的收盘价（与 BarCurrent 同标的），用于简易对数收益；不可得时为 0。
+	PriorBarClose float64 `json:"prior_bar_close,omitempty"`
 
 	// BarCurrent 为当前步对应的已完结 K 线快照（原始量纲）；只读输入。
 	BarCurrent domain.Bar `json:"bar_current"`
@@ -53,6 +81,9 @@ type AltShortStrategyInput struct {
 
 	// StepSequence 为实例内单调递增的步序号；只读输入，用于日志与诊断对齐。
 	StepSequence int64 `json:"step_sequence"`
+
+	// Minimal 为最小骨架专用参数钩子；可为 nil。
+	Minimal *MinimalSkeletonParams `json:"minimal,omitempty"`
 }
 
 // StrategySignal 是策略在本步的离散/连续综合输出，供下游编排或人工审计（策略输出结果）。
@@ -63,8 +94,17 @@ type StrategySignal struct {
 	// Strength 为 [-1,1] 或可文档化的连续强度，表示相对置信或目标尺度；无量纲。
 	Strength float64 `json:"strength"`
 
+	// ReasonDetail 为人类可读的一句决策摘要（审计）；区别于 ReasonCodes 的短码枚举。
+	ReasonDetail string `json:"reason_detail,omitempty"`
+
 	// ReasonCodes 为可机器处理的简短原因码列表（策略输出）。
 	ReasonCodes []string `json:"reason_codes,omitempty"`
+
+	// ValidUntilUnixMs 为本步信号的参考失效时间（毫秒，与注入时钟同源）；0 表示未设置。
+	ValidUntilUnixMs int64 `json:"valid_until_unix_ms,omitempty"`
+
+	// Confidence01 为本步离散决策的置信度 [0,1]；可与 Strength 解耦时使用。
+	Confidence01 float64 `json:"confidence_01,omitempty"`
 }
 
 // TradeIntent 描述策略希望在执行层被翻译为命令的一条意图（策略输出结果，非交易所状态）。
