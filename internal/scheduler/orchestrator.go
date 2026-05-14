@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/JerrrMi/quant/internal/config"
 	"github.com/JerrrMi/quant/internal/domain/command"
 	"github.com/JerrrMi/quant/internal/domain/strategy"
@@ -17,6 +17,7 @@ import (
 	"github.com/JerrrMi/quant/internal/infra/db/repository"
 	"github.com/JerrrMi/quant/internal/infra/lppl"
 	"github.com/JerrrMi/quant/internal/infra/marketdata"
+	"github.com/google/uuid"
 )
 
 // CommandDispatcher 将已落库的指令投递到 Agent 通道（如 WebSocket）；仅编排，不做策略判断。
@@ -26,18 +27,20 @@ type CommandDispatcher interface {
 
 // StepOrchestrator 单次决策链编排器：数据装配 → Step → 命令持久化与派发。
 type StepOrchestrator struct {
-	Logger       *slog.Logger
-	Stepper      strategy.Stepper
-	Bars         *marketdata.DBBarSeriesReader
-	LPPL         *lppl.InputAugmentor
-	Runs         repository.StrategyRunRepository
-	Instances    repository.InstanceRepository
-	Commands     repository.CommandRepository
-	Audit        repository.AuditRepository
-	Dispatcher   CommandDispatcher
-	Model        config.ModelParams
-	DefaultSym   string
-	Deadline     time.Duration
+	Logger     *slog.Logger
+	Stepper    strategy.Stepper
+	Bars       *marketdata.DBBarSeriesReader
+	LPPL       *lppl.InputAugmentor
+	Runs       repository.StrategyRunRepository
+	Instances  repository.InstanceRepository
+	Commands   repository.CommandRepository
+	Audit      repository.AuditRepository
+	Dispatcher CommandDispatcher
+	Model      config.ModelParams
+	DefaultSym string
+	Deadline   time.Duration
+
+	ticksInFlight atomic.Int32
 }
 
 // Tick 对全部 active 实例执行一轮 Step 链路。
@@ -45,6 +48,9 @@ func (o *StepOrchestrator) Tick(ctx context.Context) error {
 	if o == nil {
 		return fmt.Errorf("scheduler: nil orchestrator")
 	}
+	o.ticksInFlight.Add(1)
+	defer o.ticksInFlight.Add(-1)
+
 	log := o.Logger
 	if log == nil {
 		log = slog.Default()
@@ -150,17 +156,36 @@ func (o *StepOrchestrator) tickInstance(ctx context.Context, inst *models.Instan
 	return o.persistAndDispatchIntents(ctx, inst, run, in, out, nowMs, deadline, log)
 }
 
+// WaitIdle 阻塞直至当前 Tick 结束或 ctx 取消（用于停机前排空编排）。
+func (o *StepOrchestrator) WaitIdle(ctx context.Context) error {
+	if o == nil {
+		return nil
+	}
+	t := time.NewTicker(25 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+			if o.ticksInFlight.Load() == 0 {
+				return nil
+			}
+		}
+	}
+}
+
 func (o *StepOrchestrator) skipNoData(ctx context.Context, inst *models.Instance, run *models.StrategyRun, symbol string, nextSeq int64, nowMs int64, reason string) error {
 	if o.Audit == nil {
 		return fmt.Errorf("marketdata: need %s for symbol %s", reason, symbol)
 	}
 	payload, _ := json.Marshal(map[string]any{
-		"reason":       reason,
-		"symbol":       symbol,
-		"instance_id":  inst.ID,
-		"run_id":       run.ID,
-		"step_seq":     nextSeq,
-		"now_unix_ms":  nowMs,
+		"reason":      reason,
+		"symbol":      symbol,
+		"instance_id": inst.ID,
+		"run_id":      run.ID,
+		"step_seq":    nextSeq,
+		"now_unix_ms": nowMs,
 	})
 	return o.Audit.Append(ctx, &models.AuditEvent{
 		ActorType:    "system",

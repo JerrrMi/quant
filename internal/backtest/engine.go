@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/JerrrMi/quant/internal/config"
 	"github.com/JerrrMi/quant/internal/domain"
 	"github.com/JerrrMi/quant/internal/domain/command"
 	"github.com/JerrrMi/quant/internal/domain/strategy"
 	"github.com/JerrrMi/quant/internal/infra/marketdata"
+	"github.com/google/uuid"
 )
 
 type portfolio struct {
@@ -158,6 +158,11 @@ func (e *Engine) Run(ctx context.Context, bars []domain.Bar) (*BacktestReport, e
 	stepSeq := int64(0)
 
 	for idx := startIdx; idx < len(bars); idx++ {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
 		bar := bars[idx]
 		mark := bar.Close
 		var barDur int64 = 60_000
@@ -205,7 +210,7 @@ func (e *Engine) Run(ctx context.Context, bars []domain.Bar) (*BacktestReport, e
 			UnixMs:         bar.TimestampUnixMs,
 			Equity:         eq,
 			Balance:        port.balance,
-			NetPosition:   port.netQty,
+			NetPosition:    port.netQty,
 			Mark:           mark,
 			StepSequence:   stepSeq,
 			TradedNotional: tradedNotionalStep,

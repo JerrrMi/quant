@@ -1,5 +1,7 @@
-// Package lifecycle 预留进程级生命周期钩子（优雅退出、排空、就绪探针等）。
+// Package lifecycle organizes process lifecycle: ordered startup/shutdown, reconnect backoff helpers,
+// and graceful shutdown steps. It deliberately excludes strategy and execution-domain decisions.
 //
-// 依赖装配（BootstrapDeps、bootstrap.go）位于 internal/app，
-// cmd/* 在完成配置加载与日志初始化后调用 app.BootstrapSaaS/Agent/Backtest。
+// Operational semantics (startup order, reconnect, shutdown, persisted state) are documented in docs/lifecycle.md.
+//
+// BootstrapDeps remain owned by internal/app; cmd loads configs then calls BootstrapSaaS/Agent/Backtest before runtime loops.
 package lifecycle

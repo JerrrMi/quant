@@ -16,6 +16,7 @@ import (
 	"github.com/JerrrMi/quant/internal/infra/lppl"
 	"github.com/JerrrMi/quant/internal/infra/marketdata"
 	"github.com/JerrrMi/quant/internal/infra/ws"
+	"github.com/JerrrMi/quant/internal/lifecycle"
 	"github.com/JerrrMi/quant/internal/scheduler"
 	"gorm.io/gorm"
 )
@@ -32,10 +33,14 @@ type Runner struct {
 	cfg          config.SaaSConfig
 	log          *slog.Logger
 	db           *gorm.DB
+	cache        any
 	httpSrv      *http.Server
 	hub          *ws.AgentHub
 	orchestrator *scheduler.StepOrchestrator
 	trigger      *scheduler.CronTrigger
+
+	schedCancel context.CancelFunc
+	dataCancel  context.CancelFunc
 }
 
 // NewRunner 组装 Runner（不启动监听）。
@@ -72,6 +77,7 @@ func NewRunner(cfg config.SaaSConfig, deps Deps) (*Runner, error) {
 		cfg:          cfg,
 		log:          deps.Logger,
 		db:           deps.DB,
+		cache:        deps.Cache,
 		httpSrv:      &http.Server{Addr: cfg.WebSocket.ListenAddr, Handler: mux},
 		hub:          hub,
 		orchestrator: orch,
@@ -110,7 +116,6 @@ func (r *Runner) runDataLoop(ctx context.Context) {
 }
 
 func (r *Runner) recoverState(ctx context.Context) {
-	_ = ctx
 	if r.db == nil || r.log == nil {
 		return
 	}
@@ -130,61 +135,199 @@ func (r *Runner) recoverState(ctx context.Context) {
 	r.log.Info("saas state recovery done", "running_strategy_runs", runCount)
 }
 
+func (r *Runner) flushShutdownSnapshot(ctx context.Context) error {
+	if r.db == nil {
+		r.log.Warn("shutdown snapshot skipped (no database)")
+		return nil
+	}
+	var runCount int64
+	_ = r.db.WithContext(ctx).Model(&models.StrategyRun{}).Where("status = ?", "running").Count(&runCount).Error
+	repo := repository.NewGormAuditRepository(r.db)
+	payload, _ := json.Marshal(map[string]any{
+		"running_strategy_runs": runCount,
+		"phase":                 "shutdown",
+	})
+	if err := repo.Append(ctx, &models.AuditEvent{
+		ActorType:    "system",
+		ActorID:      "saas",
+		Action:       "saas.shutdown_snapshot",
+		ResourceType: "saas",
+		ResourceID:   "shutdown",
+		PayloadJSON:  string(payload),
+		OccurredAt:   time.Now().UTC(),
+	}); err != nil {
+		return fmt.Errorf("flush shutdown snapshot: %w", err)
+	}
+	r.log.Info("shutdown snapshot flushed", "running_strategy_runs", runCount)
+	return nil
+}
+
+func (r *Runner) registerLifecycleStages(schedCtx, dataCtx context.Context, mgr *lifecycle.Manager) {
+	_ = mgr.Register(lifecycle.Component{
+		Name: "recover_state",
+		Start: func(ctx context.Context) error {
+			r.recoverState(ctx)
+			return nil
+		},
+	})
+	_ = mgr.Register(lifecycle.Component{
+		Name: "http_websocket",
+		Start: func(ctx context.Context) error {
+			go func() {
+				if err := r.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					r.log.Error("http server error", "err", err)
+				}
+			}()
+			return nil
+		},
+	})
+	_ = mgr.Register(lifecycle.Component{
+		Name: "scheduler_trigger",
+		Start: func(ctx context.Context) error {
+			if r.cfg.Scheduler.Enable && r.trigger != nil {
+				if err := r.trigger.Start(schedCtx); err != nil {
+					return fmt.Errorf("scheduler trigger: %w", err)
+				}
+			}
+			if !r.cfg.Scheduler.Enable {
+				r.log.Info("scheduler disabled by config")
+			}
+			return nil
+		},
+	})
+	_ = mgr.Register(lifecycle.Component{
+		Name: "data_pipeline_loop",
+		Start: func(ctx context.Context) error {
+			go r.runDataLoop(dataCtx)
+			return nil
+		},
+	})
+}
+
+func (r *Runner) runGracefulShutdown(shutdownCtx context.Context, schedCancel, dataCancel context.CancelFunc) error {
+	coord := &lifecycle.ShutdownCoordinator{Logger: r.log, ProcessName: "saas"}
+	steps := []lifecycle.ShutdownStep{
+		{
+			Name: "stop_accepting_new_work",
+			Fn: func(ctx context.Context) error {
+				if schedCancel != nil {
+					schedCancel()
+				}
+				if dataCancel != nil {
+					dataCancel()
+				}
+				if r.trigger != nil {
+					r.trigger.Stop()
+				}
+				r.log.Info("shutdown step: scheduler and data pipeline stops requested")
+				return nil
+			},
+		},
+		{
+			Name: "wait_scheduler_tick_idle",
+			Fn: func(ctx context.Context) error {
+				if r.orchestrator == nil {
+					return nil
+				}
+				waitCtx, wcancel := context.WithTimeout(ctx, 15*time.Second)
+				defer wcancel()
+				if err := r.orchestrator.WaitIdle(waitCtx); err != nil {
+					r.log.Warn("shutdown: scheduler idle wait ended", "err", err)
+				}
+				return nil
+			},
+		},
+		{
+			Name: "flush_shutdown_snapshot",
+			Fn:   r.flushShutdownSnapshot,
+		},
+		{
+			Name: "shutdown_http_websocket",
+			Fn: func(ctx context.Context) error {
+				if err := r.httpSrv.Shutdown(ctx); err != nil {
+					return fmt.Errorf("http shutdown: %w", err)
+				}
+				return nil
+			},
+		},
+		{
+			Name: "close_cache_clients",
+			Fn: func(ctx context.Context) error {
+				_ = ctx
+				return lifecycle.CloseIfCloser(r.cache)
+			},
+		},
+		{
+			Name: "close_database",
+			Fn: func(ctx context.Context) error {
+				_ = ctx
+				return lifecycle.CloseGormSQL(r.db)
+			},
+		},
+	}
+	return coord.Run(shutdownCtx, steps)
+}
+
 // Run 启动子系统并等待 ctx。
 func (r *Runner) Run(ctx context.Context) error {
-	r.recoverState(ctx)
+	schedCtx, schedCancel := context.WithCancel(ctx)
+	defer schedCancel()
+	dataCtx, dataCancel := context.WithCancel(ctx)
+	defer dataCancel()
 
-	go func() {
-		if err := r.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			r.log.Error("http server error", "err", err)
-		}
+	r.schedCancel = schedCancel
+	r.dataCancel = dataCancel
+	defer func() {
+		r.schedCancel = nil
+		r.dataCancel = nil
 	}()
 
-	if r.cfg.Scheduler.Enable && r.trigger != nil {
-		if err := r.trigger.Start(ctx); err != nil {
-			return fmt.Errorf("scheduler trigger: %w", err)
-		}
-	}
+	mgr := lifecycle.NewManager(r.log)
+	r.registerLifecycleStages(schedCtx, dataCtx, mgr)
 
-	go r.runDataLoop(ctx)
-
-	if !r.cfg.Scheduler.Enable {
-		r.log.Info("scheduler disabled by config")
+	if err := mgr.Start(ctx); err != nil {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		_ = mgr.Stop(stopCtx)
+		return err
 	}
 
 	r.log.Info("saas listening", "addr", r.cfg.WebSocket.ListenAddr, "ws", r.cfg.WebSocket.AgentPath)
 
 	<-ctx.Done()
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	r.trigger.Stop()
-	if err := r.httpSrv.Shutdown(shutdownCtx); err != nil {
-		return err
-	}
-	return nil
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), lifecycle.DefaultShutdownTimeout)
+	defer shutdownCancel()
+
+	errShutdown := r.runGracefulShutdown(shutdownCtx, schedCancel, dataCancel)
+
+	stopMgrCtx, stopMgrCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stopMgrCancel()
+	_ = mgr.Stop(stopMgrCtx)
+
+	return errShutdown
 }
 
 // Start 显式启动 HTTP/WS、可选调度与数据循环（非阻塞返回，由 ctx 停止子任务）。
 func (r *Runner) Start(ctx context.Context) error {
-	r.recoverState(ctx)
-	go func() {
-		if err := r.httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			r.log.Error("http server error", "err", err)
-		}
-	}()
-	if r.cfg.Scheduler.Enable && r.trigger != nil {
-		if err := r.trigger.Start(ctx); err != nil {
-			return err
-		}
-	}
-	go r.runDataLoop(ctx)
-	return nil
+	schedCtx, schedCancel := context.WithCancel(ctx)
+	r.schedCancel = schedCancel
+	dataCtx, dataCancel := context.WithCancel(ctx)
+	r.dataCancel = dataCancel
+
+	mgr := lifecycle.NewManager(r.log)
+	r.registerLifecycleStages(schedCtx, dataCtx, mgr)
+	return mgr.Start(ctx)
 }
 
-// Stop 优雅关停 HTTP。
+// Stop 触发与 Run 相同的关停顺序（适用于测试或嵌入宿主）。
 func (r *Runner) Stop() error {
-	r.trigger.Stop()
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), lifecycle.DefaultShutdownTimeout)
 	defer cancel()
-	return r.httpSrv.Shutdown(shutdownCtx)
+	schedCancel := r.schedCancel
+	dataCancel := r.dataCancel
+	err := r.runGracefulShutdown(shutdownCtx, schedCancel, dataCancel)
+	r.schedCancel = nil
+	r.dataCancel = nil
+	return err
 }

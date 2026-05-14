@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -21,6 +20,7 @@ import (
 	"github.com/JerrrMi/quant/internal/infra/agentstate"
 	"github.com/JerrrMi/quant/internal/infra/binance"
 	"github.com/JerrrMi/quant/internal/infra/ws"
+	"github.com/JerrrMi/quant/internal/lifecycle"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
@@ -65,50 +65,41 @@ func Run(ctx context.Context, cfg config.AgentConfig, deps Deps) error {
 	maxN := parseMaxNotional(cfg.Risk.MaxNotionalQuotePerOrder, log)
 	execsvc := executor.NewService(venue, dedup, maxN, cfg.Risk.MaxOpenOrders)
 
-	delay := backoffDuration(cfg.Reconnect.InitialBackoffSecs, 2)
-
 	var saasSeq atomic.Int64
-	sessionsStarted := 0
-	for {
-		if cfg.Reconnect.MaxAttempts > 0 && sessionsStarted >= cfg.Reconnect.MaxAttempts {
-			return fmt.Errorf("agent: reconnect exhausted (max_sessions=%d)", cfg.Reconnect.MaxAttempts)
-		}
+	policy := lifecycle.AgentReconnectPolicy(
+		cfg.Reconnect.InitialBackoffSecs,
+		cfg.Reconnect.MaxBackoffSecs,
+		cfg.Reconnect.JitterRatio,
+		cfg.Reconnect.MaxAttempts,
+	)
+	backoff := lifecycle.NewExpBackoff(policy)
 
-		sessCtx, sessCancel := context.WithCancel(ctx)
-		sessionsStarted++
-		err := runSession(sessCtx, cfg, log, execsvc, &saasSeq)
-		sessCancel()
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err != nil {
-			log.Warn("agent session ended", "err", err)
-		}
-		j := jitterMul(cfg.Reconnect.JitterRatio)
-		sleep := time.Duration(float64(delay) * j)
-		if cfg.Reconnect.MaxBackoffSecs > 0 {
-			maxd := time.Duration(cfg.Reconnect.MaxBackoffSecs) * time.Second
-			if sleep > maxd {
-				sleep = maxd
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(sleep):
-		}
-		nd := delay * 2
-		if cfg.Reconnect.MaxBackoffSecs > 0 {
-			maxd := time.Duration(cfg.Reconnect.MaxBackoffSecs) * time.Second
-			if nd > maxd {
-				nd = maxd
-			}
-		}
-		delay = nd
+	hooks := lifecycle.ReconnectHooks{
+		OnDisconnected: func(reason error, disconnectedAt time.Time, cumulativeAttempts int) {
+			log.Warn("agent transport disconnected",
+				"err", reason,
+				"disconnected_at", disconnectedAt,
+				"cumulative_disconnect_events", cumulativeAttempts)
+		},
+		BeforeReconnect: func(nextBackoff time.Duration, sessionIndex int) {
+			log.Info("agent reconnect scheduled",
+				"sleep", nextBackoff.String(),
+				"session_index", sessionIndex)
+		},
 	}
+
+	return lifecycle.RunReconnectLoop(ctx, log, hooks, backoff, func(sessCtx context.Context) error {
+		return runSession(sessCtx, cfg, log, execsvc, &saasSeq, func(ctx context.Context) error {
+			backoff.Reset()
+			if hooks.AfterAuthSuccess != nil {
+				return hooks.AfterAuthSuccess(ctx)
+			}
+			return nil
+		})
+	})
 }
 
-func runSession(ctx context.Context, cfg config.AgentConfig, log *slog.Logger, execsvc *executor.Service, saasSeq *atomic.Int64) error {
+func runSession(ctx context.Context, cfg config.AgentConfig, log *slog.Logger, execsvc *executor.Service, saasSeq *atomic.Int64, onAuthed func(context.Context) error) error {
 	d := websocket.DefaultDialer
 	if cfg.Connection.DialTimeoutSecs > 0 {
 		d.HandshakeTimeout = time.Duration(cfg.Connection.DialTimeoutSecs) * time.Second
@@ -172,7 +163,12 @@ func runSession(ctx context.Context, cfg config.AgentConfig, log *slog.Logger, e
 	if !ar.OK {
 		return fmt.Errorf("auth rejected code=%s msg=%s", ar.ErrorCode, ar.Message)
 	}
-	log.Info("agent authenticated with SaaS", "session_id", ar.SessionID)
+	if onAuthed != nil {
+		if err := onAuthed(ctx); err != nil {
+			return fmt.Errorf("post-auth hook: %w", err)
+		}
+	}
+	log.Info("agent authenticated with SaaS", "session_id", ar.SessionID, "reconnect_backoff_reset", true)
 
 	hb := time.Duration(cfg.Connection.HeartbeatIntervalSecs) * time.Second
 	if hb <= 0 {
@@ -267,24 +263,6 @@ func parseMaxNotional(max string, log *slog.Logger) float64 {
 		return 0
 	}
 	return f
-}
-
-func backoffDuration(initialSecs int, fallback int) time.Duration {
-	if initialSecs <= 0 {
-		if fallback <= 0 {
-			return 2 * time.Second
-		}
-		return time.Duration(fallback) * time.Second
-	}
-	return time.Duration(initialSecs) * time.Second
-}
-
-func jitterMul(jitterRatio float64) float64 {
-	if jitterRatio <= 0 {
-		return 1
-	}
-	delta := jitterRatio * 2 * rand.Float64()
-	return 1 + delta
 }
 
 func recordSaasSeq(saasSeq *atomic.Int64, seq int64) {
