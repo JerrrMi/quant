@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -88,10 +89,49 @@ func (o *StepOrchestrator) Tick(ctx context.Context) error {
 	return nil
 }
 
+// RunOnce 对单个实例执行一轮 Step（用于控制台「手动运行」）；不参与全局 Tick 并发计数语义。
+func (o *StepOrchestrator) RunOnce(ctx context.Context, instanceID uint) error {
+	if o == nil {
+		return fmt.Errorf("scheduler: nil orchestrator")
+	}
+	log := o.Logger
+	if log == nil {
+		log = slog.Default()
+	}
+	if o.Instances == nil {
+		return fmt.Errorf("scheduler: missing repository")
+	}
+	inst, err := o.Instances.GetByID(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	if inst == nil {
+		return fmt.Errorf("scheduler: instance %d not found", instanceID)
+	}
+	windowBars := 96
+	if o.Model.Values != nil {
+		if v, ok := o.Model.Values["signal_lookback"]; ok {
+			windowBars = int(v)
+		}
+	}
+	if windowBars <= 0 {
+		windowBars = 96
+	}
+	featSpec := marketdata.DefaultFeatureWindowSpec(windowBars)
+	deadline := o.Deadline
+	if deadline <= 0 {
+		deadline = 2 * time.Minute
+	}
+	return o.tickInstance(ctx, inst, featSpec, deadline, log)
+}
+
 func (o *StepOrchestrator) tickInstance(ctx context.Context, inst *models.Instance, featSpec marketdata.FeatureWindowSpec, deadline time.Duration, log *slog.Logger) error {
-	symbol := o.DefaultSym
+	symbol := strings.TrimSpace(inst.Symbol)
 	if symbol == "" {
-		return fmt.Errorf("scheduler: empty default symbol")
+		symbol = o.DefaultSym
+	}
+	if symbol == "" {
+		return fmt.Errorf("scheduler: empty symbol for instance %d", inst.ID)
 	}
 	run, err := o.Runs.EnsureRunningRun(ctx, inst.ID, inst.StrategyID)
 	if err != nil {

@@ -14,6 +14,9 @@ type InstanceRepository interface {
 	GetByID(ctx context.Context, id uint) (*models.Instance, error)
 	GetByAgentKey(ctx context.Context, agentKey string) (*models.Instance, error)
 	ListActive(ctx context.Context) ([]models.Instance, error)
+	ListByUserID(ctx context.Context, userID uint, limit int) ([]models.Instance, error)
+	Update(ctx context.Context, row *models.Instance) error
+	SoftDelete(ctx context.Context, id uint) error
 }
 
 // GormInstanceRepository InstanceRepository 的 GORM 骨架实现。
@@ -57,4 +60,30 @@ func (r *GormInstanceRepository) ListActive(ctx context.Context) ([]models.Insta
 		return nil, err
 	}
 	return rows, nil
+}
+
+func (r *GormInstanceRepository) ListByUserID(ctx context.Context, userID uint, limit int) ([]models.Instance, error) {
+	if limit <= 0 {
+		limit = 500
+	}
+	var rows []models.Instance
+	if err := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("updated_at desc").
+		Limit(limit).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+func (r *GormInstanceRepository) Update(ctx context.Context, row *models.Instance) error {
+	if row == nil {
+		return errors.New("instance repo: nil row")
+	}
+	return r.db.WithContext(ctx).Save(row).Error
+}
+
+func (r *GormInstanceRepository) SoftDelete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&models.Instance{}, id).Error
 }

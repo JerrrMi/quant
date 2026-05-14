@@ -15,6 +15,7 @@ type StrategyRunRepository interface {
 	GetRunningByInstance(ctx context.Context, instanceID uint) (*models.StrategyRun, error)
 	EnsureRunningRun(ctx context.Context, instanceID, strategyID uint) (*models.StrategyRun, error)
 	UpdateLastStepSequence(ctx context.Context, runID uint, seq int64) error
+	StopRunningRunsForInstance(ctx context.Context, instanceID uint) error
 }
 
 // GormStrategyRunRepository StrategyRunRepository 的 GORM 实现。
@@ -77,4 +78,18 @@ func (r *GormStrategyRunRepository) UpdateLastStepSequence(ctx context.Context, 
 	}
 	return r.db.WithContext(ctx).Model(&models.StrategyRun{}).
 		Where("id = ?", runID).Update("last_step_sequence", seq).Error
+}
+
+func (r *GormStrategyRunRepository) StopRunningRunsForInstance(ctx context.Context, instanceID uint) error {
+	if r.db == nil {
+		return errors.New("strategy run repo: nil db")
+	}
+	now := time.Now().UTC()
+	return r.db.WithContext(ctx).Model(&models.StrategyRun{}).
+		Where("instance_id = ? AND status = ?", instanceID, "running").
+		Updates(map[string]any{
+			"status":    "stopped",
+			"ended_at":  &now,
+			"updated_at": now,
+		}).Error
 }

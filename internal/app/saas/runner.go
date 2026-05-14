@@ -73,6 +73,13 @@ func NewRunner(cfg config.SaaSConfig, deps Deps) (*Runner, error) {
 	tick := time.Duration(cfg.Scheduler.TickIntervalSecs) * time.Second
 	trigger := scheduler.NewCronTrigger(cfg.Scheduler.CronExpression, tick, deps.Logger, orch.Tick)
 
+	RegisterConsoleRoutes(mux, &ConsoleHandlers{
+		DB:   deps.DB,
+		Hub:  hub,
+		Orch: orch,
+		Log:  deps.Logger,
+	})
+
 	return &Runner{
 		cfg:          cfg,
 		log:          deps.Logger,
@@ -118,6 +125,9 @@ func (r *Runner) runDataLoop(ctx context.Context) {
 func (r *Runner) recoverState(ctx context.Context) {
 	if r.db == nil || r.log == nil {
 		return
+	}
+	if err := EnsureConsoleSeed(ctx, r.db); err != nil {
+		r.log.Warn("console seed failed", "err", err)
 	}
 	var runCount int64
 	_ = r.db.WithContext(ctx).Model(&models.StrategyRun{}).Where("status = ?", "running").Count(&runCount).Error

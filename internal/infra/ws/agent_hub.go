@@ -46,6 +46,17 @@ func (h *AgentHub) Register(agentKey string, peer *Peer, lastOutboundSeq int64) 
 	}
 }
 
+// IsConnected 报告当前是否有 Agent 会话在线（用于控制台提示断连）。
+func (h *AgentHub) IsConnected(agentKey string) bool {
+	if h == nil {
+		return false
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	sess, ok := h.peers[agentKey]
+	return ok && sess != nil && sess.Peer != nil
+}
+
 // SendCommand 向已连接 Agent 发送一条 command 信封（seq 为 SaaS 轴单调号）。
 func (h *AgentHub) SendCommand(ctx context.Context, agentKey string, cmd command.TradeCommand) error {
 	if h == nil {

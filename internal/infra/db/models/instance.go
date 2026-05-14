@@ -15,6 +15,14 @@ type Instance struct {
 	StrategyID   uint           `gorm:"index;not null"`
 	AgentKey     string         `gorm:"size:128;index:idx_instance_agent_key;not null"` // 公开标识，非 API Secret
 	DisplayName  string         `gorm:"size:191"`
+	// Symbol 为实例绑定的交易标的（venue 规范化，如 BTCUSDT）；调度与展示优先使用该字段。
+	Symbol string `gorm:"size:64;index"`
+	// MarketKind：spot | futures。
+	MarketKind string `gorm:"size:16;index"`
+	// RunMode：backtest | paper | live（控制台语义；策略 Step() 仍为纯函数）。
+	RunMode string `gorm:"size:16;index"`
+	// ParamsJSON 保存实例侧参数（资金、风控、杠杆、仓位限制等），不经由策略包解析。
+	ParamsJSON string `gorm:"type:text"`
 	Status       string         `gorm:"size:32;index;not null;default:active"` // active|paused|draining
 	LastHeartbeatAt *time.Time `gorm:"index"`
 	CreatedAt    time.Time      `gorm:"index"`

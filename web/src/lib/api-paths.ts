@@ -18,4 +18,14 @@ export const API_PATHS = {
     overview: "/api/accounts",
     history: "/api/accounts/history",
   },
+  console: {
+    templates: "/api/console/templates",
+    template: (id: string | number) =>
+      `/api/console/templates/${encodeURIComponent(String(id))}`,
+    instances: "/api/console/instances",
+    instance: (id: string | number) =>
+      `/api/console/instances/${encodeURIComponent(String(id))}`,
+    instanceActions: (id: string | number) =>
+      `/api/console/instances/${encodeURIComponent(String(id))}/actions`,
+  },
 } as const;

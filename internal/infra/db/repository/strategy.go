@@ -13,6 +13,8 @@ type StrategyRepository interface {
 	Create(ctx context.Context, row *models.Strategy) error
 	GetByID(ctx context.Context, id uint) (*models.Strategy, error)
 	ListByUserID(ctx context.Context, userID uint, limit int) ([]models.Strategy, error)
+	// ListCatalog 返回控制台模板库条目（IsCatalog=true）。
+	ListCatalog(ctx context.Context, limit int) ([]models.Strategy, error)
 }
 
 // GormStrategyRepository StrategyRepository 的 GORM 骨架实现。
@@ -45,6 +47,21 @@ func (r *GormStrategyRepository) ListByUserID(ctx context.Context, userID uint, 
 	}
 	var out []models.Strategy
 	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Limit(limit).Find(&out).Error; err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (r *GormStrategyRepository) ListCatalog(ctx context.Context, limit int) ([]models.Strategy, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	var out []models.Strategy
+	if err := r.db.WithContext(ctx).
+		Where("is_catalog = ?", true).
+		Order("updated_at desc").
+		Limit(limit).
+		Find(&out).Error; err != nil {
 		return nil, err
 	}
 	return out, nil

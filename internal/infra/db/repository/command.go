@@ -15,6 +15,7 @@ type CommandRepository interface {
 	GetByCorrelationID(ctx context.Context, correlationID string) (*models.TradeCommandRecord, error)
 	SaveFill(ctx context.Context, row *models.TradeFillRecord) error
 	ListFillsByCommandID(ctx context.Context, commandID string) ([]models.TradeFillRecord, error)
+	ListRecentByInstance(ctx context.Context, instanceID uint, limit int) ([]models.TradeCommandRecord, error)
 }
 
 // GormCommandRepository CommandRepository 的 GORM 骨架实现。
@@ -59,6 +60,21 @@ func (r *GormCommandRepository) SaveFill(ctx context.Context, row *models.TradeF
 func (r *GormCommandRepository) ListFillsByCommandID(ctx context.Context, commandID string) ([]models.TradeFillRecord, error) {
 	var out []models.TradeFillRecord
 	if err := r.db.WithContext(ctx).Where("command_id = ?", commandID).Find(&out).Error; err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (r *GormCommandRepository) ListRecentByInstance(ctx context.Context, instanceID uint, limit int) ([]models.TradeCommandRecord, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	var out []models.TradeCommandRecord
+	if err := r.db.WithContext(ctx).
+		Where("instance_id = ?", instanceID).
+		Order("created_at desc").
+		Limit(limit).
+		Find(&out).Error; err != nil {
 		return nil, err
 	}
 	return out, nil
