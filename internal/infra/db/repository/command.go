@@ -12,6 +12,7 @@ import (
 type CommandRepository interface {
 	SaveCommand(ctx context.Context, row *models.TradeCommandRecord) error
 	GetCommandByID(ctx context.Context, id string) (*models.TradeCommandRecord, error)
+	GetByCorrelationID(ctx context.Context, correlationID string) (*models.TradeCommandRecord, error)
 	SaveFill(ctx context.Context, row *models.TradeFillRecord) error
 	ListFillsByCommandID(ctx context.Context, commandID string) ([]models.TradeFillRecord, error)
 }
@@ -32,6 +33,17 @@ func (r *GormCommandRepository) SaveCommand(ctx context.Context, row *models.Tra
 func (r *GormCommandRepository) GetCommandByID(ctx context.Context, id string) (*models.TradeCommandRecord, error) {
 	var row models.TradeCommandRecord
 	if err := r.db.WithContext(ctx).First(&row, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *GormCommandRepository) GetByCorrelationID(ctx context.Context, correlationID string) (*models.TradeCommandRecord, error) {
+	var row models.TradeCommandRecord
+	if err := r.db.WithContext(ctx).Where("correlation_id = ?", correlationID).First(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}

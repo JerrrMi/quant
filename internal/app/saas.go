@@ -4,19 +4,13 @@ package app
 
 import (
 	"context"
-	"log/slog"
 
+	"github.com/JerrrMi/quant/internal/app/saas"
 	"github.com/JerrrMi/quant/internal/config"
 )
 
-// RunSaaS 启动 SaaS 控制面占位逻辑：后续在此挂载 HTTP 与 AutoMigrate。
+// RunSaaS 启动 SaaS 控制面：WS Hub、调度与数据管线占位。
 // 由 cmd/saas 的 run() 在加载配置与 BootstrapDeps 后调用。
 func RunSaaS(ctx context.Context, cfg config.SaaSConfig, deps BootstrapDeps) error {
-	_ = ctx
-	log := deps.Logger
-	if log == nil {
-		log = slog.Default()
-	}
-	log.Info("SaaS stub ready", "listen", cfg.WebSocket.ListenAddr, "ws_path", cfg.WebSocket.AgentPath, "has_db", deps.DB != nil)
-	return nil
+	return saas.Run(ctx, cfg, saas.Deps{Logger: deps.Logger, DB: deps.DB, Cache: deps.Cache})
 }

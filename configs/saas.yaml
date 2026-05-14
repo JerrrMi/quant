@@ -17,6 +17,11 @@ websocket:
 scheduler:
   enable: false
   tick_interval_seconds: 60
+  cron_expression: ""
+  default_symbol: "BTCUSDT"
+
+data_pipeline:
+  refresh_interval_seconds: 30
 
 model:
   id: "saas_orchestration_default"

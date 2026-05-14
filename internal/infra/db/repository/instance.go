@@ -13,6 +13,7 @@ type InstanceRepository interface {
 	Create(ctx context.Context, row *models.Instance) error
 	GetByID(ctx context.Context, id uint) (*models.Instance, error)
 	GetByAgentKey(ctx context.Context, agentKey string) (*models.Instance, error)
+	ListActive(ctx context.Context) ([]models.Instance, error)
 }
 
 // GormInstanceRepository InstanceRepository 的 GORM 骨架实现。
@@ -48,4 +49,12 @@ func (r *GormInstanceRepository) GetByAgentKey(ctx context.Context, agentKey str
 		return nil, err
 	}
 	return &row, nil
+}
+
+func (r *GormInstanceRepository) ListActive(ctx context.Context) ([]models.Instance, error) {
+	var rows []models.Instance
+	if err := r.db.WithContext(ctx).Where("status = ?", "active").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
 }

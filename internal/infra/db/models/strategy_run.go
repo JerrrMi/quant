@@ -12,6 +12,8 @@ type StrategyRun struct {
 	InstanceID  uint       `gorm:"index:idx_run_instance_status,priority:1;not null"`
 	StrategyID  uint       `gorm:"index;not null"`
 	Status      string     `gorm:"size:32;index:idx_run_instance_status,priority:2;not null;default:pending"` // pending|running|stopped|failed
+	// LastStepSequence 为本条运行已持久化执行的 Step 序号（恢复调度与幂等键组成用）。
+	LastStepSequence int64 `gorm:"not null;default:0"`
 	StartedAt   *time.Time `gorm:"index"`
 	EndedAt     *time.Time `gorm:"index"`
 	Note        string     `gorm:"size:512"`

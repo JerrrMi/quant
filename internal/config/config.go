@@ -45,7 +45,17 @@ type SaaSConfig struct {
 		Enable bool `yaml:"enable"`
 		// TickIntervalSecs 为策略评估节拍周期（秒）；启用调度时须为正。
 		TickIntervalSecs int `yaml:"tick_interval_seconds"`
+		// CronExpression 可选标准 cron（五域）；非空时与 TickInterval 二选一，优先 Cron（由实现解析）。
+		CronExpression string `yaml:"cron_expression"`
+		// DefaultSymbol 为未从实例/策略解析到标的时的回退（venue 规范化，如 BTCUSDT）。
+		DefaultSymbol string `yaml:"default_symbol"`
 	} `yaml:"scheduler"`
+
+	// DataPipeline 描述 SaaS 侧市场数据刷新节拍（不写交易所；消费已落库或代理来源）。
+	DataPipeline struct {
+		// RefreshIntervalSecs 为拉取/合并市场快照的周期（秒）；<=0 时与调度 tick 同周期（若调度未启用则禁用独立循环）。
+		RefreshIntervalSecs int `yaml:"refresh_interval_seconds"`
+	} `yaml:"data_pipeline"`
 
 	// Model 描述与推理服务或注册表关联的模型标识及无量纲超参。
 	Model ModelParams `yaml:"model"`
@@ -70,8 +80,11 @@ func (c *SaaSConfig) Validate() error {
 	if c.Redis.Enable && strings.TrimSpace(c.Redis.Addr) == "" {
 		return fmt.Errorf("saas config: redis.addr is required when redis.enable is true")
 	}
-	if c.Scheduler.Enable && c.Scheduler.TickIntervalSecs <= 0 {
-		return fmt.Errorf("saas config: scheduler.tick_interval_seconds must be positive when scheduler.enable is true")
+	if c.Scheduler.Enable && strings.TrimSpace(c.Scheduler.CronExpression) == "" && c.Scheduler.TickIntervalSecs <= 0 {
+		return fmt.Errorf("saas config: scheduler.tick_interval_seconds must be positive when scheduler.enable is true and cron_expression is empty")
+	}
+	if c.Scheduler.Enable && strings.TrimSpace(c.Scheduler.DefaultSymbol) == "" {
+		return fmt.Errorf("saas config: scheduler.default_symbol is required when scheduler.enable is true")
 	}
 	return nil
 }

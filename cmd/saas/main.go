@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/JerrrMi/quant/internal/app"
 	"github.com/JerrrMi/quant/internal/config"
@@ -13,7 +15,9 @@ import (
 )
 
 func main() {
-	if err := run(context.Background()); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx); err != nil {
 		slog.Error("saas exited with error", "err", err)
 		os.Exit(1)
 	}
