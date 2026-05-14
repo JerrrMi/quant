@@ -39,6 +39,8 @@ type PerformanceMetrics struct {
 	CommandHitRate   float64 `json:"command_hit_rate"`
 	CommandFailRate  float64 `json:"command_fail_rate"`
 	PartialFillRate  float64 `json:"partial_fill_rate"`
+	// AvgHoldingSteps 为完整空头往返的平均持仓步数（按权益曲线上的净仓翻转近似）。
+	AvgHoldingSteps float64 `json:"avg_holding_steps"`
 	AvgEquity        float64 `json:"avg_equity"`
 	CumulativeNetFees float64 `json:"cumulative_net_fees,omitempty"`
 }
@@ -105,6 +107,8 @@ func BuildReport(initial float64, curve []EquityPoint, outcomes []SimOutcome, cu
 		prevWasShort = isShort
 		_ = i
 	}
+
+	avgHoldSteps := avgShortRoundTripHoldingSteps(curve)
 
 	nCmd := len(outcomes)
 	var nHit, nFail, nPart float64
@@ -175,8 +179,32 @@ func BuildReport(initial float64, curve []EquityPoint, outcomes []SimOutcome, cu
 		CommandHitRate:    hitRate,
 		CommandFailRate:   failRate,
 		PartialFillRate: partRate,
+		AvgHoldingSteps:   avgHoldSteps,
 		AvgEquity:          avgE,
 		CumulativeNetFees:  cumulativeFees,
 	}
 	return rep
+}
+
+func avgShortRoundTripHoldingSteps(curve []EquityPoint) float64 {
+	const eps = 1e-8
+	var entryIdx = -1
+	var sum float64
+	var n int
+	for i := range curve {
+		isShort := curve[i].NetPosition < -eps
+		prevShort := i > 0 && curve[i-1].NetPosition < -eps
+		if entryIdx < 0 && !prevShort && isShort {
+			entryIdx = i
+		}
+		if entryIdx >= 0 && prevShort && !isShort {
+			sum += float64(i - entryIdx)
+			n++
+			entryIdx = -1
+		}
+	}
+	if n == 0 {
+		return 0
+	}
+	return sum / float64(n)
 }

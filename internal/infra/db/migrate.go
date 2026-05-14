@@ -18,6 +18,7 @@ func AutoMigrateAll(g *gorm.DB) error {
 	// 显式枚举迁移模型，避免反射式「扫全包」导致顺序与遗漏不透明。
 	toMigrate := []any{
 		&models.User{},
+		&models.BacktestJob{},
 		&models.Instance{},
 		&models.Strategy{},
 		&models.StrategyRun{},

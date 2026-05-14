@@ -17,6 +17,7 @@ replay:
     start: ""
     end: ""
   warmup_bars: 50
+  bar_stride: 1
 
 simulation:
   command_deadline_ms: 120000

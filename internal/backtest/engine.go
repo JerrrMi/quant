@@ -103,6 +103,8 @@ type Engine struct {
 	log    *slog.Logger
 	delay  int
 	deadMS int64
+	// Progress optional: completed replay steps vs total planned steps (after warmup).
+	onProgress func(done int, total int)
 }
 
 // NewEngine builds an engine; feed and sim must be non-nil for Run.
@@ -115,6 +117,15 @@ func NewEngine(cfg config.BacktestConfig, feed *DataFeed, sim *Simulator, log *s
 		deadMS = 120_000
 	}
 	return &Engine{cfg: cfg, feed: feed, sim: sim, log: log, delay: cfg.Simulation.DelayBars, deadMS: deadMS}
+}
+
+// WithProgress attaches a hook invoked during Run (best-effort; throttling由调用方处理).
+func (e *Engine) WithProgress(fn func(done, total int)) *Engine {
+	if e == nil {
+		return nil
+	}
+	e.onProgress = fn
+	return e
 }
 
 // Run executes one full walk over bars. bars must be non-decreasing by TimestampUnixMs.
@@ -156,6 +167,10 @@ func (e *Engine) Run(ctx context.Context, bars []domain.Bar) (*BacktestReport, e
 	var outcomes []SimOutcome
 	var cumFees float64
 	stepSeq := int64(0)
+	totalSteps := len(bars) - startIdx
+	if totalSteps < 0 {
+		totalSteps = 0
+	}
 
 	for idx := startIdx; idx < len(bars); idx++ {
 		select {
@@ -215,6 +230,10 @@ func (e *Engine) Run(ctx context.Context, bars []domain.Bar) (*BacktestReport, e
 			StepSequence:   stepSeq,
 			TradedNotional: tradedNotionalStep,
 		})
+		done := idx - startIdx + 1
+		if e.onProgress != nil && totalSteps > 0 {
+			e.onProgress(done, totalSteps)
+		}
 	}
 
 	rep := BuildReport(init, curve, outcomes, cumFees)
@@ -287,8 +306,12 @@ func (e *Engine) tradeCommandFromIntent(in strategy.AltShortStrategyInput, inten
 	}
 }
 
-// BacktestFromConfig loads bars via file loader, applies replay window, runs Engine.
-func BacktestFromConfig(ctx context.Context, cfg config.BacktestConfig, log *slog.Logger) (*BacktestReport, error) {
+// ProgressFunc 可选进度回调：done/total 为有效步进区间内的已完成步数与总步数。
+type ProgressFunc func(done int, total int)
+
+// BacktestFromConfig loads bars via file loader, applies replay window, runs Engine。
+// progress 为可选变参（至多一项），由控制面任务用于写进度。
+func BacktestFromConfig(ctx context.Context, cfg config.BacktestConfig, log *slog.Logger, progress ...ProgressFunc) (*BacktestReport, error) {
 	twS, twE, err := ParseReplayWindow(cfg.Replay.Window.Start, cfg.Replay.Window.End)
 	if err != nil {
 		return nil, err
@@ -299,6 +322,11 @@ func BacktestFromConfig(ctx context.Context, cfg config.BacktestConfig, log *slo
 		return nil, err
 	}
 	bars = FilterBarsTimeWindow(bars, twS, twE)
+	stride := cfg.Replay.BarStride
+	if stride <= 0 {
+		stride = 1
+	}
+	bars = DecimateBars(bars, stride)
 	if len(bars) == 0 {
 		return nil, fmt.Errorf("backtest: no bars after time filter")
 	}
@@ -338,6 +366,9 @@ func BacktestFromConfig(ctx context.Context, cfg config.BacktestConfig, log *slo
 	})
 
 	eng := NewEngine(cfg, feed, sim, log)
+	if len(progress) > 0 && progress[0] != nil {
+		eng = eng.WithProgress(progress[0])
+	}
 	return eng.Run(ctx, bars)
 }
 

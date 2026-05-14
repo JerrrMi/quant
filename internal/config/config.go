@@ -237,6 +237,8 @@ type BacktestConfig struct {
 		Window TimeWindow `yaml:"window"`
 		// WarmupBars 为正式统计前额外加载的预热 K 线根数。
 		WarmupBars int `yaml:"warmup_bars"`
+		// BarStride 回放步进：在载入后按每隔 N 根 K 线取样（1=不降采样）。
+		BarStride int `yaml:"bar_stride"`
 	} `yaml:"replay"`
 
 	Capital struct {
@@ -320,6 +322,9 @@ func (c *BacktestConfig) Validate() error {
 	}
 	if c.Replay.WarmupBars < 0 {
 		return fmt.Errorf("backtest config: replay.warmup_bars must be non-negative")
+	}
+	if c.Replay.BarStride < 0 {
+		return fmt.Errorf("backtest config: replay.bar_stride must be non-negative")
 	}
 	if c.Simulation.FailureRate < 0 || c.Simulation.FailureRate > 1 {
 		return fmt.Errorf("backtest config: simulation.failure_rate must be in [0,1]")

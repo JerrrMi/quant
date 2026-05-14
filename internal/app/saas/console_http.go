@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JerrrMi/quant/internal/infra/db/models"
@@ -23,6 +24,8 @@ type ConsoleHandlers struct {
 	Hub  *ws.AgentHub
 	Orch *scheduler.StepOrchestrator
 	Log  *slog.Logger
+
+	backtestCancel sync.Map // job ID (uint) -> context.CancelFunc
 }
 
 // RegisterConsoleRoutes 将 /v1/console/* 注册到主 mux。
@@ -37,6 +40,11 @@ func RegisterConsoleRoutes(mux *http.ServeMux, h *ConsoleHandlers) {
 	mux.HandleFunc("GET /v1/console/instances/{id}", h.getInstance)
 	mux.HandleFunc("PATCH /v1/console/instances/{id}", h.patchInstance)
 	mux.HandleFunc("POST /v1/console/instances/{id}/actions", h.instanceActions)
+
+	mux.HandleFunc("GET /v1/console/backtests", h.listBacktests)
+	mux.HandleFunc("POST /v1/console/backtests", h.createBacktest)
+	mux.HandleFunc("GET /v1/console/backtests/{id}", h.getBacktest)
+	mux.HandleFunc("POST /v1/console/backtests/{id}/actions", h.backtestActions)
 }
 
 func (h *ConsoleHandlers) writeJSON(w http.ResponseWriter, status int, v any) {
