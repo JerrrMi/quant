@@ -12,14 +12,14 @@ import {
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-import { fetchSession, loginRequest, logoutRequest } from "@/api/adapters/auth";
+import { getSession, login as loginApi, logout as logoutApi } from "@/api/auth";
 import type { AuthUserDTO } from "@/types/auth";
 
 type AuthContextValue = {
   user: AuthUserDTO | null;
   loading: boolean;
   refresh: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  login: (account: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const session = await fetchSession();
+      const session = await getSession();
       setUser(session?.user ?? null);
     } finally {
       setLoading(false);
@@ -59,8 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      await loginRequest({ email, password });
+    async (account: string, password: string) => {
+      await loginApi({ account, password });
       await refresh();
       router.replace("/dashboard");
     },
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await logoutRequest();
+      await logoutApi();
     } finally {
       setUser(null);
       router.replace("/login");

@@ -5,4 +5,6 @@ export const publicEnv = {
   sseBaseURL: process.env.NEXT_PUBLIC_SSE_BASE_URL ?? "",
   deployEnv: process.env.NEXT_PUBLIC_DEPLOY_ENV ?? "development",
   devMockAuth: process.env.NEXT_PUBLIC_DEV_MOCK_AUTH === "true",
+  /** System dashboard uses in-memory mock data instead of `/api/system/dashboard`. */
+  useMockApi: process.env.NEXT_PUBLIC_USE_MOCK_API === "true",
 } as const;

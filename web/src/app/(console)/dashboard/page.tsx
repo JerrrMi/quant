@@ -5,7 +5,7 @@ export default function DashboardPage() {
   return (
     <ConsolePage
       title="Dashboard"
-      description="交易系统控制台入口 · 聚合 Agents、策略实例与风控信号的占位视图。"
+      description="系统总览：SaaS / Agent / 策略实例与连接健康。数据由 BFF 或 Mock 轮询刷新。"
     >
       <DashboardOverview />
     </ConsolePage>

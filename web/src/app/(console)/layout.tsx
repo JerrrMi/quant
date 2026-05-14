@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { ConsoleAuthGate } from "@/components/auth/console-auth-gate";
 import { ConsoleShell } from "@/components/layout/console-shell";
 
 export default function ConsoleRootLayout({
@@ -7,5 +8,9 @@ export default function ConsoleRootLayout({
 }: {
   children: ReactNode;
 }) {
-  return <ConsoleShell>{children}</ConsoleShell>;
+  return (
+    <ConsoleShell>
+      <ConsoleAuthGate>{children}</ConsoleAuthGate>
+    </ConsoleShell>
+  );
 }

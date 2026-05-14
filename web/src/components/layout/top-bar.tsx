@@ -1,7 +1,8 @@
 "use client";
 
-import { LogOut, Menu, UserRound, Wifi } from "lucide-react";
+import { LogOut, Menu, UserRound } from "lucide-react";
 
+import { useConfirm } from "@/components/feedback/confirm-provider";
 import { ThemeSwitcher } from "@/components/layout/theme-switcher";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ type TopBarProps = {
 
 export function TopBar({ onOpenSidebar }: TopBarProps) {
   const { user, logout } = useAuth();
+  const confirm = useConfirm();
   const envName = envLabel[publicEnv.deployEnv] ?? publicEnv.deployEnv;
 
   return (
@@ -61,12 +63,14 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
 
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="hidden items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300 sm:flex">
-            <Wifi className="h-3.5 w-3.5" aria-hidden />
-            已连接
+          <div className="hidden items-center gap-2 rounded-full border border-border bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground sm:flex">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden />
+            会话有效
           </div>
         </TooltipTrigger>
-        <TooltipContent>控制台 API · WebSocket / SSE 接入点在适配层预留</TooltipContent>
+        <TooltipContent>
+          会话由 Cookie / Bearer（若下发）共同决定；详情见登录与 API 封装。
+        </TooltipContent>
       </Tooltip>
 
       <ThemeSwitcher />
@@ -94,7 +98,16 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
             className={cn("gap-2 text-destructive focus:text-destructive")}
             onSelect={(event) => {
               event.preventDefault();
-              void logout();
+              void (async () => {
+                const ok = await confirm({
+                  title: "确认退出登录？",
+                  description: "将清除本地凭据并回到登录页（httpOnly 会话由服务端注销）。",
+                  confirmLabel: "退出",
+                  cancelLabel: "取消",
+                  destructive: true,
+                });
+                if (ok) await logout();
+              })();
             }}
           >
             <LogOut className="h-4 w-4" />
