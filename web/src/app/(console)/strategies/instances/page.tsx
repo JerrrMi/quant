@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useCallback } from "react";
 import { Boxes, Plus } from "lucide-react";
 
 import { fetchInstances, instanceAction } from "@/api/instances";
 import { ConsolePage } from "@/components/layout/console-page";
+import { DataFreshness } from "@/components/layout/data-freshness";
 import { EmptyState } from "@/components/feedback/empty-state";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
@@ -28,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import type { StrategyInstanceRowDTO } from "@/types/strategies";
 import { cn } from "@/lib/utils";
+import { useConsolePoll } from "@/hooks/use-console-poll";
 
 const POLL_MS = 4000;
 
@@ -65,7 +67,7 @@ export default function StrategyInstancesPage() {
   const [rows, setRows] = useState<StrategyInstanceRowDTO[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     try {
       const data = await fetchInstances();
       setRows(data.instances);
@@ -73,16 +75,9 @@ export default function StrategyInstancesPage() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : "加载失败");
     }
-  }
-
-  useEffect(() => {
-    const boot = setTimeout(() => void refresh(), 0);
-    const t = setInterval(() => void refresh(), POLL_MS);
-    return () => {
-      clearTimeout(boot);
-      clearInterval(t);
-    };
   }, []);
+
+  const { lastUpdated, refreshNow } = useConsolePoll(refresh, POLL_MS);
 
   async function doAction(
     id: number,
@@ -95,7 +90,14 @@ export default function StrategyInstancesPage() {
   return (
     <ConsolePage
       title="策略实例"
-      description="实例绑定模板、标的与 Agent；危险操作需二次确认。状态每 4 秒刷新。"
+      description="实例绑定模板、标的与 Agent；编排动作可能影响实盘资金，请谨慎操作。"
+      meta={
+        <DataFreshness
+          lastUpdated={lastUpdated}
+          onRefresh={refreshNow}
+          hint={`每 ${POLL_MS / 1000}s 自动刷新 · 心跳与 Agent 连通性联动`}
+        />
+      }
       actions={
         <Button size="sm" asChild>
           <Link href="/strategies/instances/new">
@@ -186,7 +188,12 @@ export default function StrategyInstancesPage() {
                     </div>
                   </TableCell>
                   <TableCell className="max-w-[120px] truncate text-xs">
-                    {row.agent_key}
+                    <Link
+                      href={`/agents/${encodeURIComponent(row.agent_key)}`}
+                      className="text-primary hover:underline"
+                    >
+                      {row.agent_key}
+                    </Link>
                   </TableCell>
                   <TableCell className="max-w-[180px] truncate text-[11px] text-muted-foreground">
                     {row.last_command_summary || "—"}
@@ -204,10 +211,22 @@ export default function StrategyInstancesPage() {
                           控制
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuContent align="end" className="w-52">
                         <DropdownMenuItem asChild>
                           <Link href={`/strategies/instances/${row.id}`}>
                             查看详情
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link href={`/commands?instance_id=${row.id}`}>
+                            命令流（本实例）
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link
+                            href={`/logs?instance_id=${row.id}&agent_key=${encodeURIComponent(row.agent_key)}`}
+                          >
+                            审计日志
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem
@@ -215,7 +234,9 @@ export default function StrategyInstancesPage() {
                             const ok = await confirm({
                               title: "启动编排",
                               description:
-                                "实例将进入 active 状态并尝试恢复运行周期（取决于调度器与市场数据）。确认启动？",
+                                row.run_mode === "live"
+                                  ? "实盘模式：启动后将连接执行端并可能产生真实订单，请再次确认风险敞口与 Agent 在线。"
+                                  : "实例将进入 active 状态并尝试恢复运行周期（取决于调度器与市场数据）。确认启动？",
                               confirmLabel: "启动编排",
                             });
                             if (!ok) return;
@@ -227,9 +248,12 @@ export default function StrategyInstancesPage() {
                         <DropdownMenuItem
                           onClick={async () => {
                             const ok = await confirm({
-                              title: "暂停编排",
+                              title:
+                                row.run_mode === "live" ? "暂停实盘编排" : "暂停编排",
                               description:
-                                "暂停后调度器默认跳过该实例；未完成风控指令仍需人工核对。",
+                                row.run_mode === "live"
+                                  ? "实盘实例暂停后，调度器停止下发新意图；请同时在交易所核对未完成挂单与持仓。"
+                                  : "暂停后调度器默认跳过该实例；未完成风控指令仍需人工核对。",
                               confirmLabel: "暂停",
                             });
                             if (!ok) return;
@@ -255,6 +279,18 @@ export default function StrategyInstancesPage() {
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={async () => {
+                            const ok = await confirm({
+                              title:
+                                row.run_mode === "live"
+                                  ? "恢复实盘编排"
+                                  : "恢复编排",
+                              description:
+                                row.run_mode === "live"
+                                  ? "恢复后调度器将继续向已连接的 Agent 下发策略意图，可能影响交易所挂单与持仓，请确认。"
+                                  : "恢复运行周期；请确认市场数据与 Agent 可用。",
+                              confirmLabel: "恢复编排",
+                            });
+                            if (!ok) return;
                             await doAction(row.id, "resume");
                           }}
                         >

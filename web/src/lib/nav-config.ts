@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Layers,
   LineChart,
+  ListOrdered,
   ScrollText,
   Wallet,
   type LucideIcon,
@@ -68,6 +69,12 @@ export const mainNav: NavItem[] = [
   },
   {
     kind: "link",
+    title: "命令流",
+    href: "/commands",
+    icon: ListOrdered,
+  },
+  {
+    kind: "link",
     title: "Logs",
     href: "/logs",
     icon: ScrollText,
@@ -82,6 +89,7 @@ export const breadcrumbLabels: Record<string, string> = {
   instances: "Instances",
   backtests: "Backtests",
   accounts: "Accounts",
+  commands: "命令流",
   logs: "Logs",
   login: "Login",
 };

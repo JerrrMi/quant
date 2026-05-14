@@ -9,13 +9,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { fetchAgentDetail, postAgentControl } from "@/api/agents";
 import { ApiError } from "@/api/errors";
 import { useConfirm } from "@/components/feedback/confirm-provider";
 import { ConsolePage } from "@/components/layout/console-page";
+import { DataFreshness } from "@/components/layout/data-freshness";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
 import { StatusTag } from "@/components/status-tag";
@@ -36,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useConsolePoll } from "@/hooks/use-console-poll";
 import { publicEnv } from "@/lib/env";
 import { formatDateTime, formatRelativeShort } from "@/lib/format-trading";
 import { cn } from "@/lib/utils";
@@ -143,22 +145,23 @@ export function AgentDetailConsolePage() {
     }
   }, [agentId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void Promise.resolve().then(() => {
-      if (!cancelled) void load();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [load]);
+  const { lastUpdated } = useConsolePoll(
+    useCallback(async () => {
+      await load();
+    }, [load]),
+    8000,
+  );
 
   const runControl = async (action: AgentControlActionDTO) => {
     const labels: Record<AgentControlActionDTO, string> = {
-      start: "启动 Agent 进程并将实例纳入编排？",
-      stop: "停止 Agent（可能影响挂单与持仓同步）？",
-      reconnect: "强制断开并重连 SaaS WebSocket？",
-      refresh: "刷新账户与持仓快照（拉取交易所状态）？",
+      start:
+        "启动 Agent 进程并将实例纳入编排。若已连接交易所，请确认实盘风险。",
+      stop:
+        "停止 Agent：执行端退场，可能影响挂单同步、仓位上报与风控闭环；请在交易所侧自行核对资金与持仓。",
+      reconnect:
+        "强制断开并重连 SaaS WebSocket：短暂失去信令通道，可能影响指令时效。",
+      refresh:
+        "刷新账户与持仓快照：将从交易所拉取状态，请确认网络与密钥配置正确。",
     };
     const ok = await confirm({
       title: `确认执行：${action}`,
@@ -236,6 +239,14 @@ export function AgentDetailConsolePage() {
     <ConsolePage
       title={agent.displayName}
       description={`${agent.id} · ${envLabels[agent.environment]} · ${execLabels[agent.execMode]}`}
+      meta={
+        <DataFreshness
+          lastUpdated={lastUpdated}
+          onRefresh={() => void load(true)}
+          refreshing={refreshing}
+          hint="每 8s 自动刷新详情"
+        />
+      }
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {publicEnv.useMockApi ? (
@@ -373,6 +384,26 @@ export function AgentDetailConsolePage() {
 
       <Card className="border-border/80">
         <CardHeader className="pb-2">
+          <CardTitle className="text-base">观测跳转</CardTitle>
+          <CardDescription>命令、审计与实例编排入口</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/logs?agent_key=${encodeURIComponent(agent.id)}`}>
+              审计日志
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/commands">命令流</Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/strategies/instances">策略实例</Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/80">
+        <CardHeader className="pb-2">
           <CardTitle className="text-base">心跳历史</CardTitle>
           <CardDescription>最近采样；失败点用于快速定位抖动</CardDescription>
         </CardHeader>
@@ -436,7 +467,14 @@ export function AgentDetailConsolePage() {
                 ) : (
                   boundInstances.map((b) => (
                     <TableRow key={b.id}>
-                      <TableCell className="font-mono text-xs">{b.id}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        <Link
+                          className="text-primary hover:underline"
+                          href={`/strategies/instances/${b.id}`}
+                        >
+                          {b.id}
+                        </Link>
+                      </TableCell>
                       <TableCell>{b.symbolLabel}</TableCell>
                       <TableCell>{b.statusLabel}</TableCell>
                     </TableRow>

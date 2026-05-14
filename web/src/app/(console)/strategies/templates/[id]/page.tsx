@@ -51,12 +51,21 @@ export default function StrategyTemplateDetailPage() {
       title={data?.name ?? "模板详情"}
       description="模板参数来自后端 config_json（默认快照）；策略逻辑仍在服务端策略包，前端不做计算。"
       actions={
-        <Button variant="outline" size="sm" asChild>
-          <Link href="/strategies/templates">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            返回列表
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/strategies/templates">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              返回列表
+            </Link>
+          </Button>
+          {data ? (
+            <Button size="sm" asChild>
+              <Link href={`/strategies/instances/new?template_id=${data.id}`}>
+                创建实例
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       }
     >
       {err ? <ErrorState description={err} /> : null}

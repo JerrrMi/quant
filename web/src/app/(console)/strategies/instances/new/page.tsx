@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
@@ -59,6 +60,7 @@ const payloadSchema = z.object({
 });
 
 export default function NewStrategyInstancePage() {
+  const sp = useSearchParams();
   const [step, setStep] = useState(0);
   const [templates, setTemplates] = useState<StrategyTemplateDTO[]>([]);
   const [agents, setAgents] = useState<AgentsListDTO["agents"]>([]);
@@ -78,6 +80,15 @@ export default function NewStrategyInstancePage() {
     agent_key: "",
     ackDanger: false as boolean,
   });
+
+  useEffect(() => {
+    const tid = sp.get("template_id");
+    if (!tid) return;
+    const n = parseInt(tid, 10);
+    if (!Number.isNaN(n) && n > 0) {
+      setForm((f) => ({ ...f, strategy_id: n }));
+    }
+  }, [sp]);
 
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
   const [submitErr, setSubmitErr] = useState<string | null>(null);

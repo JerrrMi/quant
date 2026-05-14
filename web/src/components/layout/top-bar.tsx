@@ -1,6 +1,7 @@
 "use client";
 
-import { LogOut, Menu, UserRound } from "lucide-react";
+import Link from "next/link";
+import { LogOut, Menu, ListOrdered, UserRound } from "lucide-react";
 
 import { useConfirm } from "@/components/feedback/confirm-provider";
 import { ThemeSwitcher } from "@/components/layout/theme-switcher";
@@ -32,9 +33,10 @@ const envLabel: Record<string, string> = {
 
 type TopBarProps = {
   onOpenSidebar: () => void;
+  onOpenCommandStream?: () => void;
 };
 
-export function TopBar({ onOpenSidebar }: TopBarProps) {
+export function TopBar({ onOpenSidebar, onOpenCommandStream }: TopBarProps) {
   const { user, logout } = useAuth();
   const confirm = useConfirm();
   const envName = envLabel[publicEnv.deployEnv] ?? publicEnv.deployEnv;
@@ -74,6 +76,24 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
       </Tooltip>
 
       <ThemeSwitcher />
+
+      {onOpenCommandStream ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="hidden gap-1 sm:inline-flex"
+          onClick={() => onOpenCommandStream()}
+        >
+          <ListOrdered className="h-4 w-4" />
+          命令流
+        </Button>
+      ) : null}
+      <Button type="button" variant="ghost" size="sm" className="hidden sm:inline-flex" asChild>
+        <Link href="/commands" className="text-xs text-muted-foreground">
+          命令页
+        </Link>
+      </Button>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

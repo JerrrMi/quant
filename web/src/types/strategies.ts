@@ -63,6 +63,14 @@ export type StrategyInstanceCommandEntryDTO = {
   created_at: string;
   summary: string;
   error: string;
+  command_id?: string;
+  instance_id?: number;
+  symbol?: string;
+  intent?: string;
+  issued_at?: string;
+  dispatched_at?: string;
+  acked_at?: string;
+  report_at?: string;
 };
 
 export type StrategyInstanceReportEntryDTO = {

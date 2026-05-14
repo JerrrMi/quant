@@ -79,3 +79,24 @@ func (r *GormCommandRepository) ListRecentByInstance(ctx context.Context, instan
 	}
 	return out, nil
 }
+
+// ListRecentForConsoleUser 列出属于某控制台用户（经由 instances.user_id）的最近指令。
+// instanceID 非 nil 时在上述集合上再按实例过滤。
+func (r *GormCommandRepository) ListRecentForConsoleUser(ctx context.Context, userID uint, instanceID *uint, limit int) ([]models.TradeCommandRecord, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	sub := r.db.WithContext(ctx).Model(&models.Instance{}).Select("id").Where("user_id = ?", userID)
+	q := r.db.WithContext(ctx).Where("instance_id IN (?)", sub)
+	if instanceID != nil {
+		q = q.Where("instance_id = ?", *instanceID)
+	}
+	var out []models.TradeCommandRecord
+	if err := q.Order("created_at desc").Limit(limit).Find(&out).Error; err != nil {
+		return nil, err
+	}
+	return out, nil
+}

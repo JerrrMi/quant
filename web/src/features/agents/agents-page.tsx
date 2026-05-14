@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchAgentsList } from "@/api/agents";
 import { ApiError } from "@/api/errors";
 import { ConsolePage } from "@/components/layout/console-page";
+import { DataFreshness } from "@/components/layout/data-freshness";
 import { EmptyState } from "@/components/feedback/empty-state";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
@@ -172,6 +173,14 @@ export function AgentsConsolePage() {
     <ConsolePage
       title="Agents"
       description="执行节点运行状态 · 心跳、WS、实例绑定与最近异常（数据来自统一 API 层）。"
+      meta={
+        <DataFreshness
+          lastUpdated={generatedAt ? new Date(generatedAt) : null}
+          onRefresh={() => void load(true)}
+          refreshing={refreshing}
+          hint={`每 ${POLL_MS / 1000}s 自动刷新`}
+        />
+      }
       actions={
         <div className="flex flex-wrap items-center gap-2">
           {publicEnv.useMockApi ? (

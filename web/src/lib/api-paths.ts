@@ -32,5 +32,7 @@ export const API_PATHS = {
       `/api/console/backtests/${encodeURIComponent(String(id))}`,
     backtestActions: (id: string | number) =>
       `/api/console/backtests/${encodeURIComponent(String(id))}/actions`,
+    commands: "/api/console/commands",
+    audit: "/api/console/audit",
   },
 } as const;

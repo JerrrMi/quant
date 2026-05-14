@@ -11,6 +11,7 @@ import {
   patchInstance,
 } from "@/api/instances";
 import { ConsolePage } from "@/components/layout/console-page";
+import { DataFreshness } from "@/components/layout/data-freshness";
 import { ErrorState } from "@/components/feedback/error-state";
 import { LoadingState } from "@/components/feedback/loading-state";
 import { useConfirm } from "@/components/feedback/confirm-provider";
@@ -23,8 +24,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { StrategyInstanceDetailDTO } from "@/types/strategies";
+import { formatDateTime } from "@/lib/format-trading";
 import { cn } from "@/lib/utils";
+import { useConsolePoll } from "@/hooks/use-console-poll";
 
 const POLL_MS = 4000;
 
@@ -68,6 +79,8 @@ export default function StrategyInstanceDetailPage() {
     }
   }, [id]);
 
+  const { lastUpdated, refreshNow } = useConsolePoll(refresh, POLL_MS);
+
   useEffect(() => {
     const h = setTimeout(() => {
       setParamsSaved(null);
@@ -75,15 +88,6 @@ export default function StrategyInstanceDetailPage() {
     }, 0);
     return () => clearTimeout(h);
   }, [id]);
-
-  useEffect(() => {
-    const boot = setTimeout(() => void refresh(), 0);
-    const t = setInterval(() => void refresh(), POLL_MS);
-    return () => {
-      clearTimeout(boot);
-      clearInterval(t);
-    };
-  }, [refresh]);
 
   async function saveParams() {
     if (!data) return;
@@ -117,6 +121,13 @@ export default function StrategyInstanceDetailPage() {
     <ConsolePage
       title={data?.display_name ?? "实例详情"}
       description="模板参数与实例参数分区展示；底部为固定的编排动作区，避免误触。"
+      meta={
+        <DataFreshness
+          lastUpdated={lastUpdated}
+          onRefresh={refreshNow}
+          hint={`每 ${POLL_MS / 1000}s 自动刷新 · 含 Agent 连通与最近命令`}
+        />
+      }
       actions={
         <Button variant="outline" size="sm" asChild>
           <Link href="/strategies/instances">
@@ -126,7 +137,9 @@ export default function StrategyInstanceDetailPage() {
         </Button>
       }
     >
-      {err ? <ErrorState description={err} onRetry={() => void refresh()} /> : null}
+      {err ? (
+        <ErrorState description={err} onRetry={() => void refreshNow()} />
+      ) : null}
       {!data && !err ? <LoadingState label="加载实例…" /> : null}
 
       {data ? (
@@ -155,7 +168,12 @@ export default function StrategyInstanceDetailPage() {
               <CardContent className="grid gap-3 text-sm md:grid-cols-2">
                 <div>
                   <div className="text-muted-foreground">模板</div>
-                  <div className="font-medium">{data.template_name}</div>
+                  <Link
+                    href={`/strategies/templates/${data.template_id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {data.template_name}
+                  </Link>
                   <div className="text-xs text-muted-foreground">{data.template_kind}</div>
                 </div>
                 <div>
@@ -167,7 +185,12 @@ export default function StrategyInstanceDetailPage() {
                 </div>
                 <div>
                   <div className="text-muted-foreground">AgentKey</div>
-                  <div className="break-all font-mono text-xs">{data.agent_key}</div>
+                  <Link
+                    href={`/agents/${encodeURIComponent(data.agent_key)}`}
+                    className="break-all font-mono text-xs text-primary hover:underline"
+                  >
+                    {data.agent_key}
+                  </Link>
                 </div>
                 <div>
                   <div className="text-muted-foreground">心跳</div>
@@ -188,6 +211,36 @@ export default function StrategyInstanceDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">快速跳转</CardTitle>
+              <CardDescription>实例、模板、执行端与可观测性串联</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/strategies/templates/${data.template_id}`}>模板详情</Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/agents/${encodeURIComponent(data.agent_key)}`}>
+                  Agent 控制台
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/commands?instance_id=${data.id}`}>命令流</Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link
+                  href={`/logs?instance_id=${data.id}&agent_key=${encodeURIComponent(data.agent_key)}`}
+                >
+                  审计日志
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/accounts">资金视图</Link>
+              </Button>
+            </CardContent>
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
@@ -271,19 +324,55 @@ export default function StrategyInstanceDetailPage() {
             <Card>
               <CardHeader>
                 <CardTitle>最近命令</CardTitle>
+                <CardDescription>
+                  <Link
+                    href={`/commands?instance_id=${data.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    在命令流页查看全部
+                  </Link>
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 text-xs">
-                {data.recent_commands.map((c) => (
-                  <div key={c.id} className="rounded border px-2 py-1">
-                    <div className="font-medium">
-                      {c.kind} · {c.status}
-                    </div>
-                    <div className="text-muted-foreground">{c.summary}</div>
-                    {c.error ? (
-                      <div className="text-destructive">{c.error}</div>
-                    ) : null}
-                  </div>
-                ))}
+              <CardContent className="overflow-x-auto text-xs">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>状态</TableHead>
+                      <TableHead>标的 / 意图</TableHead>
+                      <TableHead>下发</TableHead>
+                      <TableHead>ack</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.recent_commands.map((c) => (
+                      <TableRow key={c.id}>
+                        <TableCell>
+                          {c.kind} · {c.status}
+                          {c.error ? (
+                            <div className="text-destructive">{c.error}</div>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="max-w-[180px]">
+                          <div>
+                            <code>{c.symbol ?? data.symbol}</code>
+                          </div>
+                          <div
+                            className="truncate text-muted-foreground"
+                            title={c.intent ?? c.summary}
+                          >
+                            {c.intent || c.summary}
+                          </div>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          {formatDateTime(c.dispatched_at || c.issued_at || c.created_at)}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          {c.acked_at ? formatDateTime(c.acked_at) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
             <Card>
@@ -320,10 +409,12 @@ export default function StrategyInstanceDetailPage() {
                   type="button"
                   size="sm"
                   onClick={async () => {
+                    const isLive = data.run_mode === "live";
                     const ok = await confirm({
                       title: "启动编排",
-                      description:
-                        "实例将标记为 active 并尝试拉起运行周期；请确认 Agent 与标的可用。",
+                      description: isLive
+                        ? "当前为实盘模式：启动后可能向交易所发送真实订单，请确认 Agent 在线、风控参数与账户余额。"
+                        : "实例将标记为 active 并尝试拉起运行周期；请确认 Agent 与标的可用。",
                       confirmLabel: "启动编排",
                     });
                     if (!ok) return;
@@ -338,10 +429,12 @@ export default function StrategyInstanceDetailPage() {
                   size="sm"
                   variant="secondary"
                   onClick={async () => {
+                    const isLive = data.run_mode === "live";
                     const ok = await confirm({
                       title: "停止编排",
-                      description:
-                        "停止运行周期并标记 paused；未成交挂单请在交易所侧自行核对。",
+                      description: isLive
+                        ? "实盘停止：调度器将结束当前运行周期；请务必在交易所核对挂单与持仓。"
+                        : "停止运行周期并标记 paused；未成交挂单请在交易所侧自行核对。",
                       confirmLabel: "停止编排",
                       destructive: true,
                     });
@@ -357,6 +450,15 @@ export default function StrategyInstanceDetailPage() {
                   size="sm"
                   variant="outline"
                   onClick={async () => {
+                    const isLive = data.run_mode === "live";
+                    const ok = await confirm({
+                      title: isLive ? "暂停实盘编排" : "暂停编排",
+                      description: isLive
+                        ? "暂停后不再下发新意图；请同时在交易所核对未完成订单。"
+                        : "暂停后调度器默认跳过该实例。",
+                      confirmLabel: "暂停",
+                    });
+                    if (!ok) return;
                     await instanceAction(data.id, "pause");
                     await refresh();
                   }}
@@ -368,6 +470,15 @@ export default function StrategyInstanceDetailPage() {
                   size="sm"
                   variant="outline"
                   onClick={async () => {
+                    const isLive = data.run_mode === "live";
+                    const ok = await confirm({
+                      title: isLive ? "恢复实盘编排" : "恢复编排",
+                      description: isLive
+                        ? "恢复后将再次向 Agent 下发策略意图，可能影响真实资金。"
+                        : "恢复运行周期；请确认市场数据与 Agent 可用。",
+                      confirmLabel: "恢复",
+                    });
+                    if (!ok) return;
                     await instanceAction(data.id, "resume");
                     await refresh();
                   }}
@@ -379,9 +490,12 @@ export default function StrategyInstanceDetailPage() {
                   size="sm"
                   variant="outline"
                   onClick={async () => {
+                    const isLive = data.run_mode === "live";
                     const ok = await confirm({
                       title: "重启编排",
-                      description: "等价于停止后立即启动；用于排障。",
+                      description: isLive
+                        ? "实盘重启：等价于停止后立即启动，期间可能出现短暂敞口风险，请确认。"
+                        : "等价于停止后立即启动；用于排障。",
                       confirmLabel: "重启",
                       destructive: true,
                     });
@@ -399,10 +513,12 @@ export default function StrategyInstanceDetailPage() {
                   size="sm"
                   variant="secondary"
                   onClick={async () => {
+                    const isLive = data.run_mode === "live";
                     const ok = await confirm({
                       title: "手动运行一轮 Step",
-                      description:
-                        "触发单次编排 Tick（需要市场数据可读）；可能生成意图命令。",
+                      description: isLive
+                        ? "实盘：本次 Tick 可能生成并下发真实交易意图，请明确知晓风险。"
+                        : "触发单次编排 Tick（需要市场数据可读）；可能生成意图命令。",
                       confirmLabel: "运行一轮",
                     });
                     if (!ok) return;
@@ -423,7 +539,7 @@ export default function StrategyInstanceDetailPage() {
                     const ok = await confirm({
                       title: "结束实例（软删除）",
                       description:
-                        "该操作将终止运行记录并软删除实例行，历史审计仍可追溯。此风险操作不可从前端撤销。",
+                        "该操作将终止运行记录并软删除实例行，历史审计仍可追溯。实盘场景下请在交易所自行核对仓位与挂单；此操作不可从前端撤销。",
                       confirmLabel: "确认结束实例",
                       destructive: true,
                       cancelLabel: "取消",

@@ -1,6 +1,7 @@
 "use client";
 
 import { Activity, RefreshCw, TrendingUp } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { fetchAccountsHistory, fetchAccountsOverview } from "@/api/accounts";
@@ -283,6 +284,22 @@ export function AccountsConsolePage() {
               <span className="font-medium text-foreground tabular-nums">
                 {formatDateTime(overview?.updatedAt)}
               </span>
+            </div>
+
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <span className="text-muted-foreground">联动：</span>
+              <Link className="text-primary hover:underline" href="/strategies/instances">
+                策略实例
+              </Link>
+              <Link className="text-primary hover:underline" href="/commands">
+                命令流
+              </Link>
+              <Link className="text-primary hover:underline" href="/agents">
+                Agents
+              </Link>
+              <Link className="text-primary hover:underline" href="/logs">
+                审计日志
+              </Link>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { CommandStreamDrawer } from "@/features/commands/command-stream-drawer";
 import { SidebarLinks } from "@/components/layout/sidebar-links";
 import { TopBar } from "@/components/layout/top-bar";
 import { publicEnv } from "@/lib/env";
@@ -17,6 +18,7 @@ import {
 
 export function ConsoleShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
   const { collapsed, toggle } = useSidebarCollapsed();
 
   return (
@@ -24,9 +26,14 @@ export function ConsoleShell({ children }: { children: ReactNode }) {
       <AppSidebar collapsed={collapsed} onToggleCollapsed={toggle} />
 
       <div className="flex min-h-screen flex-1 flex-col">
-        <TopBar onOpenSidebar={() => setMobileOpen(true)} />
+        <TopBar
+          onOpenSidebar={() => setMobileOpen(true)}
+          onOpenCommandStream={() => setCommandOpen(true)}
+        />
         <main className="flex-1 bg-muted/25">{children}</main>
       </div>
+
+      <CommandStreamDrawer open={commandOpen} onOpenChange={setCommandOpen} />
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="flex w-[260px] flex-col gap-0 p-0">

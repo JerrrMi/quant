@@ -88,9 +88,10 @@ export default function BacktestDetailPage() {
     if (!data) return;
     const ok = await confirm({
       title: "暂停此回测？",
-      description: "正在运行的回放将被取消。",
+      description: "运行中的回放将被取消，已产生的日志与进度保留。",
       destructive: true,
       confirmLabel: "暂停",
+      cancelLabel: "取消",
     });
     if (!ok) return;
     try {
@@ -105,9 +106,12 @@ export default function BacktestDetailPage() {
   async function doTerminate() {
     if (!data) return;
     const ok = await confirm({
-      title: "终止此回测？",
+      title: "终止此回测任务？",
+      description:
+        "将请求服务端取消运行中的回放并保留已写入的日志。与实盘不同，但会占用计算资源；若任务卡死可安全终止后重试。",
       destructive: true,
-      confirmLabel: "终止",
+      confirmLabel: "终止任务",
+      cancelLabel: "取消",
     });
     if (!ok) return;
     try {
@@ -153,6 +157,19 @@ export default function BacktestDetailPage() {
           </Button>
           {data ? (
             <>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/strategies/templates/${data.job.template_id}`}>
+                  模板
+                </Link>
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link
+                  href={`/backtests/compare?left=${encodeURIComponent(String(data.job.id))}&right=`}
+                  title="在地址栏补全 right= 另一任务 ID"
+                >
+                  结果对比
+                </Link>
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -164,7 +181,7 @@ export default function BacktestDetailPage() {
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="destructive"
                 disabled={data.job.status !== "running"}
                 onClick={() => void doTerminate()}
               >
@@ -215,9 +232,12 @@ export default function BacktestDetailPage() {
                 </div>
                 <div className="flex justify-between gap-2">
                   <span className="text-muted-foreground">模板</span>
-                  <span className="truncate text-right">
+                  <Link
+                    className="truncate text-right font-medium text-primary hover:underline"
+                    href={`/strategies/templates/${data.job.template_id}`}
+                  >
                     {data.job.template_name} (#{data.job.template_id})
-                  </span>
+                  </Link>
                 </div>
                 {data.job.instance_id != null ? (
                   <div className="flex justify-between gap-2">

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	domaincommand "github.com/JerrrMi/quant/internal/domain/command"
 	"github.com/JerrrMi/quant/internal/infra/db/models"
 	"github.com/JerrrMi/quant/internal/infra/db/repository"
 	"github.com/JerrrMi/quant/internal/infra/ws"
@@ -45,6 +46,9 @@ func RegisterConsoleRoutes(mux *http.ServeMux, h *ConsoleHandlers) {
 	mux.HandleFunc("POST /v1/console/backtests", h.createBacktest)
 	mux.HandleFunc("GET /v1/console/backtests/{id}", h.getBacktest)
 	mux.HandleFunc("POST /v1/console/backtests/{id}/actions", h.backtestActions)
+
+	mux.HandleFunc("GET /v1/console/commands", h.listCommands)
+	mux.HandleFunc("GET /v1/console/audit", h.listAudit)
 }
 
 func (h *ConsoleHandlers) writeJSON(w http.ResponseWriter, status int, v any) {
@@ -419,17 +423,11 @@ func (h *ConsoleHandlers) getInstance(w http.ResponseWriter, r *http.Request) {
 
 	cmdRepo := repository.NewGormCommandRepository(h.DB)
 	cmds, _ := cmdRepo.ListRecentByInstance(ctx, inst.ID, 15)
-	cmdViews := make([]map[string]string, 0, len(cmds))
+	cmdSym := inst.Symbol
+	cmdViews := make([]map[string]any, 0, len(cmds))
 	for i := range cmds {
 		c := &cmds[i]
-		cmdViews = append(cmdViews, map[string]string{
-			"id":         c.ID,
-			"kind":       c.Kind,
-			"status":     c.Status,
-			"created_at": c.CreatedAt.UTC().Format(time.RFC3339),
-			"summary":    summarizeCommand(c),
-			"error":      c.ErrorMessage,
-		})
+		cmdViews = append(cmdViews, h.commandToConsoleView(c, cmdSym))
 	}
 
 	repRepo := repository.NewGormReportRepository(h.DB)
@@ -733,4 +731,218 @@ func (h *ConsoleHandlers) instanceActions(w http.ResponseWriter, r *http.Request
 		return
 	}
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *ConsoleHandlers) commandToConsoleView(c *models.TradeCommandRecord, instSymbol string) map[string]any {
+	var tc domaincommand.TradeCommand
+	_ = json.Unmarshal([]byte(c.PayloadJSON), &tc)
+	symbol := instSymbol
+	if strings.TrimSpace(tc.Symbol) != "" {
+		symbol = tc.Symbol
+	}
+	intent := ""
+	if tc.Intent.IntentID != "" {
+		intent = fmt.Sprintf("%s · %s · ro=%v", tc.Intent.IntentID, tc.Intent.Side, tc.Intent.IsReduceOnly)
+	}
+	dispatch := ""
+	if c.DispatchedAt != nil {
+		dispatch = c.DispatchedAt.UTC().Format(time.RFC3339)
+	}
+	ack := ""
+	if c.AckedAt != nil {
+		ack = c.AckedAt.UTC().Format(time.RFC3339)
+	}
+	reportAt := ""
+	if !c.UpdatedAt.IsZero() {
+		reportAt = c.UpdatedAt.UTC().Format(time.RFC3339)
+	}
+	return map[string]any{
+		"command_id":    c.ID,
+		"instance_id":   c.InstanceID,
+		"symbol":        symbol,
+		"intent":        intent,
+		"kind":          c.Kind,
+		"status":        c.Status,
+		"issued_at":     c.CreatedAt.UTC().Format(time.RFC3339),
+		"dispatched_at": dispatch,
+		"acked_at":      ack,
+		"report_at":     reportAt,
+		"error":         c.ErrorMessage,
+		"summary":       summarizeCommand(c),
+		// 兼容旧前端字段
+		"id":         c.ID,
+		"created_at": c.CreatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func (h *ConsoleHandlers) listCommands(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, err := h.consoleUserID(ctx)
+	if err != nil {
+		h.writeErr(w, http.StatusInternalServerError, "console user missing — run SaaS seed")
+		return
+	}
+	limit := 50
+	if s := strings.TrimSpace(r.URL.Query().Get("limit")); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	var filterInst *uint
+	if s := strings.TrimSpace(r.URL.Query().Get("instance_id")); s != "" {
+		n64, err := strconv.ParseUint(s, 10, 64)
+		if err != nil {
+			h.writeErr(w, http.StatusBadRequest, "invalid instance_id")
+			return
+		}
+		instRepo := repository.NewGormInstanceRepository(h.DB)
+		inst, err := instRepo.GetByID(ctx, uint(n64))
+		if err != nil || inst == nil || inst.UserID != userID {
+			h.writeErr(w, http.StatusNotFound, "instance not found")
+			return
+		}
+		u := uint(n64)
+		filterInst = &u
+	}
+	instRepo := repository.NewGormInstanceRepository(h.DB)
+	insts, err := instRepo.ListByUserID(ctx, userID, 500)
+	if err != nil {
+		h.writeErr(w, http.StatusInternalServerError, "list instances failed")
+		return
+	}
+	symByID := map[uint]string{}
+	for i := range insts {
+		symByID[insts[i].ID] = insts[i].Symbol
+	}
+	cmdRepo := repository.NewGormCommandRepository(h.DB)
+	rows, err := cmdRepo.ListRecentForConsoleUser(ctx, userID, filterInst, limit)
+	if err != nil {
+		h.writeErr(w, http.StatusInternalServerError, "list commands failed")
+		return
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for i := range rows {
+		sym := symByID[rows[i].InstanceID]
+		out = append(out, h.commandToConsoleView(&rows[i], sym))
+	}
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"commands":    out,
+		"server_time": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func (h *ConsoleHandlers) listAudit(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, err := h.consoleUserID(ctx)
+	if err != nil {
+		h.writeErr(w, http.StatusInternalServerError, "console user missing — run SaaS seed")
+		return
+	}
+	instRepo := repository.NewGormInstanceRepository(h.DB)
+	insts, err := instRepo.ListByUserID(ctx, userID, 500)
+	if err != nil {
+		h.writeErr(w, http.StatusInternalServerError, "list instances failed")
+		return
+	}
+	q := r.URL.Query()
+	agentKey := strings.TrimSpace(q.Get("agent_key"))
+	instanceFilter := strings.TrimSpace(q.Get("instance_id"))
+
+	var scoped []uint
+	for i := range insts {
+		in := &insts[i]
+		if agentKey != "" && in.AgentKey != agentKey {
+			continue
+		}
+		if instanceFilter != "" {
+			if strconv.FormatUint(uint64(in.ID), 10) != instanceFilter {
+				continue
+			}
+		}
+		scoped = append(scoped, in.ID)
+	}
+
+	flt := repository.AuditConsoleListFilter{
+		ActionPrefix: strings.TrimSpace(q.Get("action")),
+		ResourceType: strings.TrimSpace(q.Get("module")),
+		ResourceID:   strings.TrimSpace(q.Get("resource_id")),
+		ActorID:      strings.TrimSpace(q.Get("actor_id")),
+		Level:        strings.TrimSpace(q.Get("level")),
+	}
+	if s := strings.TrimSpace(q.Get("limit")); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			flt.Limit = n
+		}
+	}
+	if ts := strings.TrimSpace(q.Get("from")); ts != "" {
+		t, err := time.Parse(time.RFC3339, ts)
+		if err != nil {
+			h.writeErr(w, http.StatusBadRequest, "invalid from (use RFC3339)")
+			return
+		}
+		flt.Since = &t
+	}
+	if ts := strings.TrimSpace(q.Get("to")); ts != "" {
+		t, err := time.Parse(time.RFC3339, ts)
+		if err != nil {
+			h.writeErr(w, http.StatusBadRequest, "invalid to (use RFC3339)")
+			return
+		}
+		flt.Until = &t
+	}
+
+	auditRepo := repository.NewGormAuditRepository(h.DB)
+	rows, err := auditRepo.ListConsoleVisible(ctx, scoped, flt)
+	if err != nil {
+		h.writeErr(w, http.StatusInternalServerError, "list audit failed")
+		return
+	}
+	type rowDTO struct {
+		ID           uint   `json:"id"`
+		ActorType    string `json:"actor_type"`
+		ActorID      string `json:"actor_id"`
+		Action       string `json:"action"`
+		ResourceType string `json:"resource_type"`
+		ResourceID   string `json:"resource_id"`
+		Level        string `json:"level"`
+		Module       string `json:"module"`
+		PayloadJSON  string `json:"payload_json"`
+		OccurredAt   string `json:"occurred_at"`
+	}
+	out := make([]rowDTO, 0, len(rows))
+	for i := range rows {
+		ev := &rows[i]
+		lvl := auditLevelHeuristic(ev.Action)
+		mod := ev.ResourceType
+		if mod == "" {
+			mod = "unknown"
+		}
+		out = append(out, rowDTO{
+			ID:           ev.ID,
+			ActorType:    ev.ActorType,
+			ActorID:      ev.ActorID,
+			Action:       ev.Action,
+			ResourceType: ev.ResourceType,
+			ResourceID:   ev.ResourceID,
+			Level:        lvl,
+			Module:       mod,
+			PayloadJSON:  ev.PayloadJSON,
+			OccurredAt:   ev.OccurredAt.UTC().Format(time.RFC3339),
+		})
+	}
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"events":      out,
+		"server_time": time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+func auditLevelHeuristic(action string) string {
+	a := strings.ToLower(action)
+	if strings.Contains(a, "fail") || strings.Contains(a, "error") || strings.Contains(a, "terminate") {
+		return "error"
+	}
+	if strings.Contains(a, "warn") || strings.Contains(a, "pause") || strings.Contains(a, "drain") {
+		return "warn"
+	}
+	return "info"
 }
