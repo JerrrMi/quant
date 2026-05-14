@@ -239,3 +239,81 @@ func TestMergeFillSnapshotsIdempotentByFillID(t *testing.T) {
 		t.Fatalf("got %+v", out)
 	}
 }
+
+// 约束：应答帧必须带 ack_seq，且与对端被确认帧 seq 对齐。
+func TestCommandAck_rejectsMissingAckSeq(t *testing.T) {
+	ctx := context.Background()
+	trans := &memoryPipe{incoming: make(chan []byte, 1), outgoing: make(chan []byte, 1)}
+	saasPeer := ws.NewPeer(ws.RoleSaaS, trans, nil)
+	ack := command.CommandAck{CommandID: "c", Status: command.CommandStatusAccepted, RefEnvelopeSeq: 7}
+	err := saasPeer.Send(ctx, ws.MsgCommandAck, 3, nil, ack)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
+// 非应答类型禁止携带 ack_seq（防止错误关联）。
+func TestCommand_mustNotIncludeAckSeq(t *testing.T) {
+	ctx := context.Background()
+	trans := &memoryPipe{incoming: make(chan []byte, 1), outgoing: make(chan []byte, 1)}
+	saasPeer := ws.NewPeer(ws.RoleSaaS, trans, nil)
+	ackRef := int64(9)
+	cmd := command.TradeCommand{CommandID: "c1", Symbol: "BTCUSDT", Side: domain.SideSell}
+	err := saasPeer.Send(ctx, ws.MsgCommand, 2, &ackRef, cmd)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+}
+
+// JSONCodec 对嵌套领域类型的往返应保持协议稳定（字段由 json tag 锁定）。
+func TestJSONCodec_envelopeRoundtrip(t *testing.T) {
+	var codec ws.JSONCodec
+	cmd := command.TradeCommand{
+		CommandID: "id-1", InstanceID: "i", StrategyID: "s", Symbol: "BTCUSDT",
+		Side: domain.SideSell, Kind: command.CommandKindPlace, IdempotencyKey: "ik",
+	}
+	raw, err := codec.MarshalEnvelope(ws.MsgCommand, 5, nil, cmd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := codec.UnmarshalEnvelope(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Type != ws.MsgCommand || env.Seq != 5 || env.AckSeq != nil {
+		t.Fatalf("envelope shell: %+v", env)
+	}
+	var got command.TradeCommand
+	if err := ws.DecodePayload(env, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.CommandID != cmd.CommandID || got.IdempotencyKey != cmd.IdempotencyKey || got.Side != cmd.Side {
+		t.Fatalf("payload mismatch %+v", got)
+	}
+}
+
+// 断线后新会话清空进程内去重表时，同键会再次「首次投递」——持久化幂等必须由执行器/DB 底座兜底。
+func TestCommandDedup_dropSeenModelsSessionReset(t *testing.T) {
+	d := ws.NewCommandDedup()
+	cmd := command.TradeCommand{IdempotencyKey: "idem-session"}
+	if !d.FirstApply(cmd) {
+		t.Fatal("first apply")
+	}
+	if d.FirstApply(cmd) {
+		t.Fatal("duplicate in same session should not apply twice")
+	}
+	d.DropSeen(cmd)
+	if !d.FirstApply(cmd) {
+		t.Fatal("after DropSeen, memory layer allows re-delivery; downstream dedup must still protect venue idempotency")
+	}
+}
+
+// SaaS 缓冲帧是否在 Agent last_seen 之后需要重放。
+func TestSaasOutboundNeedsReplay_semantics(t *testing.T) {
+	if !ws.SaasOutboundNeedsReplay(3, 4) {
+		t.Fatal("strictly newer seq should replay")
+	}
+	if ws.SaasOutboundNeedsReplay(4, 4) {
+		t.Fatal("equal seq is not replay")
+	}
+}
