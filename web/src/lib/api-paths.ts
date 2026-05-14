@@ -8,4 +8,14 @@ export const API_PATHS = {
   system: {
     dashboard: "/api/system/dashboard",
   },
+  agents: {
+    list: "/api/agents",
+    detail: (id: string) => `/api/agents/${encodeURIComponent(id)}`,
+    control: (id: string) =>
+      `/api/agents/${encodeURIComponent(id)}/control`,
+  },
+  accounts: {
+    overview: "/api/accounts",
+    history: "/api/accounts/history",
+  },
 } as const;
