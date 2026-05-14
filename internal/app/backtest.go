@@ -2,23 +2,36 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/JerrrMi/quant/internal/backtest"
 	"github.com/JerrrMi/quant/internal/config"
 )
 
-// RunBacktest 编排回测占位的调用链：历史加载器 → 引擎 → 策略调用器。
-// 由 cmd/backtest 的 run() 调用；deps.DB 可为 nil（纯内存回放）。
+// RunBacktest loads history, walks bars with shared strategy.Step, and logs KPIs.
 func RunBacktest(ctx context.Context, cfg config.BacktestConfig, deps BootstrapDeps) error {
-	_ = ctx
 	log := deps.Logger
 	if log == nil {
 		log = slog.Default()
 	}
-	loader := backtest.NewHistoricalLoader()
-	engine := backtest.NewEngine(loader)
-	log.Info("Backtest stub wired", "symbol", cfg.Data.Symbol, "provider", cfg.Data.Provider, "has_engine", engine != nil)
-	// TODO: 接入 domain 策略 Step 与 Bar/Candle 输入
-	return backtest.RunOnce(engine, log)
+	rep, err := backtest.BacktestFromConfig(ctx, cfg, log)
+	if err != nil {
+		return fmt.Errorf("backtest: %w", err)
+	}
+	m := rep.Metrics
+	log.Info("backtest completed",
+		"final_equity", m.FinalEquity,
+		"total_return", m.TotalReturn,
+		"max_drawdown_01", m.MaxDrawdown01,
+		"win_rate", m.WinRate,
+		"round_trips", m.NumRoundTrips,
+		"turnover_ratio", m.TurnoverRatio,
+		"command_hit_rate", m.CommandHitRate,
+		"command_fail_rate", m.CommandFailRate,
+		"partial_fill_rate", m.PartialFillRate,
+		"steps", len(rep.EquityCurve),
+		"commands", len(rep.CommandStats),
+	)
+	return nil
 }

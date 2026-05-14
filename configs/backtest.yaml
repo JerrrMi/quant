@@ -16,7 +16,24 @@ replay:
   window:
     start: ""
     end: ""
-  warmup_bars: 200
+  warmup_bars: 50
+
+simulation:
+  command_deadline_ms: 120000
+  lot_step: 0.001
+  use_taker_fees: true
+  failure_rate: 0
+  partial_fill_prob: 0
+  partial_fill_min_frac: 0.5
+  partial_fill_max_frac: 1
+  delay_bars: 0
+  funding_bps_per_day: 0
+  rng_seed: 42
+
+lppl:
+  enabled: false
+  bubble_metric_01: 0
+  job_id: ""
 
 capital:
   initial_quote: "100000"
@@ -25,6 +42,7 @@ capital:
 model:
   id: "backtest_model_default"
   values:
+    signal_lookback: 20
     position_target: -0.05
 
 logging:

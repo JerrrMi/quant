@@ -248,6 +248,36 @@ type BacktestConfig struct {
 
 	Model ModelParams `yaml:"model"`
 
+	// LPPL optional injection into AltShortStrategyInput.Features (same adapter as SaaS).
+	LPPL struct {
+		Enabled        bool    `yaml:"enabled"`
+		BubbleMetric01 float64 `yaml:"bubble_metric_01"`
+		JobID          string  `yaml:"job_id"`
+	} `yaml:"lppl"`
+
+	// Simulation drives execution approximations (not venue truth).
+	Simulation struct {
+		// CommandDeadlineMs is added to bar time for TradeCommand.DeadlineUnixMs.
+		CommandDeadlineMs int64 `yaml:"command_deadline_ms"`
+		// LotStep rounds base quantity (same role as venue lot size).
+		LotStep float64 `yaml:"lot_step"`
+		// UseTakerFees when true applies taker_bps else maker_bps.
+		UseTakerFees bool `yaml:"use_taker_fees"`
+		// FailureRate is probability [0,1] that a simulated command ends in synthetic reject.
+		FailureRate float64 `yaml:"failure_rate"`
+		// PartialFillProb is probability [0,1] of partial fill when not failing.
+		PartialFillProb float64 `yaml:"partial_fill_prob"`
+		// PartialFillMinFrac and MaxFrac bound partial size (uniform).
+		PartialFillMinFrac float64 `yaml:"partial_fill_min_frac"`
+		PartialFillMaxFrac float64 `yaml:"partial_fill_max_frac"`
+		// DelayBars defers execution by N additional bars (0 = same bar).
+		DelayBars int `yaml:"delay_bars"`
+		// FundingBpsPerDay scales funding charged on abs(position)*mark per bar.
+		FundingBpsPerDay float64 `yaml:"funding_bps_per_day"`
+		// RNGSeed; 0 means seed from crypto/rand in NewSimulator (still deterministic per run if unused).
+		RNGSeed int64 `yaml:"rng_seed"`
+	} `yaml:"simulation"`
+
 	Logging struct {
 		Level string `yaml:"level"`
 	} `yaml:"logging"`
@@ -290,6 +320,30 @@ func (c *BacktestConfig) Validate() error {
 	}
 	if c.Replay.WarmupBars < 0 {
 		return fmt.Errorf("backtest config: replay.warmup_bars must be non-negative")
+	}
+	if c.Simulation.FailureRate < 0 || c.Simulation.FailureRate > 1 {
+		return fmt.Errorf("backtest config: simulation.failure_rate must be in [0,1]")
+	}
+	if c.Simulation.PartialFillProb < 0 || c.Simulation.PartialFillProb > 1 {
+		return fmt.Errorf("backtest config: simulation.partial_fill_prob must be in [0,1]")
+	}
+	if c.Simulation.PartialFillMinFrac < 0 || c.Simulation.PartialFillMinFrac > 1 {
+		return fmt.Errorf("backtest config: simulation.partial_fill_min_frac must be in [0,1]")
+	}
+	if c.Simulation.PartialFillMaxFrac < 0 || c.Simulation.PartialFillMaxFrac > 1 {
+		return fmt.Errorf("backtest config: simulation.partial_fill_max_frac must be in [0,1]")
+	}
+	if c.Simulation.PartialFillMaxFrac < c.Simulation.PartialFillMinFrac {
+		return fmt.Errorf("backtest config: simulation.partial_fill_max_frac must be >= min_frac")
+	}
+	if c.Simulation.DelayBars < 0 {
+		return fmt.Errorf("backtest config: simulation.delay_bars must be non-negative")
+	}
+	if c.Simulation.FundingBpsPerDay < 0 {
+		return fmt.Errorf("backtest config: simulation.funding_bps_per_day must be non-negative")
+	}
+	if c.Simulation.LotStep < 0 {
+		return fmt.Errorf("backtest config: simulation.lot_step must be non-negative")
 	}
 	return nil
 }
