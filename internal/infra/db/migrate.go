@@ -28,6 +28,7 @@ func AutoMigrateAll(g *gorm.DB) error {
 		&models.AgentReportRecord{},
 		&models.WSSession{},
 		&models.AuditEvent{},
+		&models.AgentDedupKey{},
 	}
 
 	if err := g.AutoMigrate(toMigrate...); err != nil {

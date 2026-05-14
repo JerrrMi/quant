@@ -94,12 +94,21 @@ func (c *SaaSConfig) Validate() error {
 // AgentConfig 是执行端配置：场所连接、重连、风控以及与密钥相关的 **环境变量名**。
 // 真实 API Key/Secret 只能通过环境注入，不得出现在 YAML 明文字段中。
 type AgentConfig struct {
+	Identity struct {
+		// ClientID 在 WebSocket 握手时传递给 SaaS，必须与其 `Instance.AgentKey` 一致。
+		ClientID string `yaml:"client_id"`
+		// AgentID 可选，用于诊断。
+		AgentID string `yaml:"agent_id"`
+	} `yaml:"identity"`
+
 	Binance struct {
 		// APIKeyEnv 为读取 API Key 的环境变量名（例如 "ALTSHORT_BINANCE_API_KEY"）。
 		APIKeyEnv string `yaml:"api_key_env"`
 		// APISecretEnv 为读取 API Secret 的环境变量名。
 		APISecretEnv string `yaml:"api_secret_env"`
-		// UseTestnet 为 true 时连接测试网端点（由 executor/infra 解释）。
+		// PassphraseEnv 为可选口令环境变量（Binance Futures 不适用；占位供其他 venues 或未来）。
+		PassphraseEnv string `yaml:"passphrase_env"`
+		// UseTestnet 为 true 时连接测试网端点（由 infra 客户端解释）。
 		UseTestnet bool `yaml:"use_testnet"`
 	} `yaml:"binance"`
 
@@ -112,6 +121,8 @@ type AgentConfig struct {
 		DialTimeoutSecs int `yaml:"dial_timeout_seconds"`
 		// TLSInsecureSkipVerify 仅用于开发环境；生产应为 false。
 		TLSInsecureSkipVerify bool `yaml:"tls_insecure_skip_verify"`
+		// HeartbeatIntervalSecs 应用层 heartbeat 间隔；<=0 使用默认。
+		HeartbeatIntervalSecs int `yaml:"heartbeat_interval_seconds"`
 	} `yaml:"connection"`
 
 	Exchange struct {
@@ -154,6 +165,9 @@ func (c *AgentConfig) Validate() error {
 	if c == nil {
 		return fmt.Errorf("agent config: nil")
 	}
+	if strings.TrimSpace(c.Identity.ClientID) == "" {
+		return fmt.Errorf("agent config: identity.client_id is required (must match SaaS Instance.agent_key)")
+	}
 	if strings.TrimSpace(c.Binance.APIKeyEnv) == "" {
 		return fmt.Errorf("agent config: binance.api_key_env is required (name of env var, not the secret)")
 	}
@@ -177,6 +191,9 @@ func (c *AgentConfig) Validate() error {
 	}
 	if c.Reconnect.MaxAttempts < 0 {
 		return fmt.Errorf("agent config: reconnect.max_attempts must be non-negative")
+	}
+	if c.Connection.HeartbeatIntervalSecs < 0 {
+		return fmt.Errorf("agent config: connection.heartbeat_interval_seconds must be non-negative")
 	}
 	if c.Connection.DialTimeoutSecs < 0 {
 		return fmt.Errorf("agent config: connection.dial_timeout_seconds must be non-negative")

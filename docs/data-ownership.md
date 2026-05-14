@@ -32,6 +32,7 @@
 
 | 模型 | 表语义 |
 |------|--------|
+| `AgentDedupKey` | Agent 进程内对已执行指令幂等键（`CorrelationKey`）的持久镜像，防重放下单 |
 | `TradeFillRecord` | 成交/填充；以 `Venue` + `VenueTradeID` 唯一约束去重，支撑与交易所对账 |
 | `TradeCommandRecord`（镜像） | 已接收指令副本与本地状态机；**以 SaaS 指令流为权威来源**，重启后通过对账/重放对齐 |
 | `WSSession` | Agent 进程视角的出站连接观测（`scope=agent_outbound`） |

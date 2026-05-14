@@ -1,5 +1,9 @@
 # AltShort Agent 执行端
-# 凭证：以下为 **环境变量名** 占位，请在本机/export 同名变量填入测试网或实盘钥匙；勿把真实密钥写入仓库。
+# 默认路径：configs/agent.yaml（项目内等价于运维意义上的 config.agent.yaml）。
+# 凭证：以下为 **环境变量名** 占位；勿把真实密钥写入仓库。
+identity:
+  client_id: "local-dev-agent"
+
 binance:
   api_key_env: "ALTSHORT_BINANCE_API_KEY"
   api_secret_env: "ALTSHORT_BINANCE_API_SECRET"
@@ -10,6 +14,7 @@ connection:
   local_bind_addr: "0.0.0.0:0"
   dial_timeout_seconds: 30
   tls_insecure_skip_verify: false
+  heartbeat_interval_seconds: 25
 
 exchange:
   name: "binance"
